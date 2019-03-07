@@ -20,19 +20,24 @@
 # --block-penalty=0.1 : it gives penalty of 0.1 when tried to go fwd against an obstacle, based on scan image.
 # you can also use dal_ros_aml.py: does the same as dal.py
 
+SAVE_LOC=$3
 UPDATE=''
-MAP=/home/seo/Work/tb3_anl/maps/montreal_map_inv.npy
-#MAP=maps/mlab-02-map-224x224.npy
 
-#MODEL JAY
-#RLMODEL='/home/seo/Work/tb3_anl/RL/rl.model'
-#PMMODEL='/home/seo/Work/tb3_anl/LM/SharonCarter-densenet121-11x11.mdl'
+## this loads random mazes:
+MAP="maze"
+## this loads random box rooms:
+# MAP="randombox"
+
+## this loads custom maps: the file should be saved with np.save() with 0=open space, 1=occupied.
+# MAP=maps/mlab-02-map-224x224.npy
+
+## if you are trainging from the scratch:
 RLMODEL=none
 PMMODEL=none
-#MODEL 0
+
+# if you resume from or test some models 
 #RLMODEL='RL/rl.model'
 #PMMODEL='LM/densenet121-Pod.mdl'
-
 
 PMNET='densenet121'
 BEL_GRIDS=11
@@ -40,7 +45,7 @@ HEADINGS=4
 LM_GRIDS=11
 EPISODE_LENGTH=15
 N_EPISODE=$2
-LP=$3
+LP=1e-4
 
 if [ $1 = train_lm ]; then
     UPDATE=$UPDATE' --update-pm-by=GTL '
@@ -108,7 +113,7 @@ python sim/dal.py \
  --pm-model=$PMMODEL \
  --rl-model=$RLMODEL \
  --pm-net=$PMNET -ch3=ZERO --drop-rate=0.1 \
- --save-loc=./train_montreal \
+ --save-loc=$SAVE_LOC \
  --fov 130 230 \
  --init-error=NONE \
  $UPDATE \

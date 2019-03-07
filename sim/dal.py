@@ -575,7 +575,7 @@ class LocalizationNode:
         if self.current_state == "new_env_pose":
             ### place objects in the env
             self.clear_objects()
-            if self.args.load_map == None:
+            if self.args.load_map == None or self.args.load_map == "maze":
                 self.set_maze_grid()
                 self.set_walls()
             elif self.args.load_map == 'randombox':
