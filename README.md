@@ -1,9 +1,12 @@
 # Deep Active Localization (DAL)
-Repository for Deep Active Localization research and benchmarks
-- We are still working on complete documentation of the code. 
+Repository for Deep Active Localization research and benchmarks. You can read our full paper on arxiv: https://arxiv.org/abs/1903.01669
+- (Minor Note: We are still working on some minor documentations of the code, but it is ready to use)
+
+For training or testing on our custom simulator, see: sim/readme.md
 
 Requirements:
 - Python 3.5+
+- Pytorch 1.0
 - OpenAI Gym
 - Numpy
 
