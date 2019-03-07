@@ -12,6 +12,6 @@ to run dal.py for training/evaluation, you can do the following:
 
 10 is the number of episodes, which you can change.
 
-Output logs and trained models are saved under `./output/YYYYMMDD-HHMMSS-NN/`.
+Output logs and trained models are saved under `./output/YYYYMMDD-HHMMSS-NN/`. (Create `./output` first.)
 
 You can edit `train_mtl_4x11.sh` to load maps and trained models or change learning rates.
