@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 from __future__ import print_function
 
-from utils import *
+from sim.utils import *
 from random_box_map import *
 from navi import *
 
@@ -162,28 +162,24 @@ class LocalizationNode:
             self.map_cols = 224
             self.perceptual_model = None
         elif self.args.pm_net == "densenet121":
-            #/home/sr2/keehong.seo/my_python/lib/python2.7/site-packages/torchvision/models/densenet.py
             self.map_rows = 224
             self.map_cols = 224
             self.perceptual_model = densenet121(pretrained = self.args.use_pretrained, drop_rate = self.args.drop_rate)
             num_ftrs = self.perceptual_model.classifier.in_features # 1024
             self.perceptual_model.classifier = nn.Linear(num_ftrs, num_classes)
         elif self.args.pm_net == "densenet169":
-            #/home/sr2/keehong.seo/my_python/lib/python2.7/site-packages/torchvision/models/densenet.py
             self.map_rows = 224
             self.map_cols = 224
             self.perceptual_model = densenet169(pretrained = self.args.use_pretrained, drop_rate = self.args.drop_rate)
             num_ftrs = self.perceptual_model.classifier.in_features # 1664
             self.perceptual_model.classifier = nn.Linear(num_ftrs, num_classes)
         elif self.args.pm_net == "densenet201":
-            #/home/sr2/keehong.seo/my_python/lib/python2.7/site-packages/torchvision/models/densenet.py
             self.map_rows = 224
             self.map_cols = 224
             self.perceptual_model = densenet201(pretrained = self.args.use_pretrained, drop_rate = self.args.drop_rate)
             num_ftrs = self.perceptual_model.classifier.in_features # 1920
             self.perceptual_model.classifier = nn.Linear(num_ftrs, num_classes)
         elif self.args.pm_net == "densenet161":
-            #/home/sr2/keehong.seo/my_python/lib/python2.7/site-packages/torchvision/models/densenet.py
             self.map_rows = 224
             self.map_cols = 224
             self.perceptual_model = densenet161(pretrained = self.args.use_pretrained, drop_rate = self.args.drop_rate)
@@ -259,6 +255,11 @@ class LocalizationNode:
 
         ## D.P. was here ##
 
+        if self.args.rl_model == "none":
+            self.args.rl_model = None
+        if self.args.pm_model == "none":
+            self.args.pm_model = None
+        
         # load models
         if self.args.pm_model is not None:
             state_dict = torch.load(self.args.pm_model)
@@ -273,8 +274,6 @@ class LocalizationNode:
             self.perceptual_model.load_state_dict(new_state_dict)
             print ('perceptual model %s is loaded.'%self.args.pm_model)
 
-        if self.args.rl_model == "none":
-            self.args.rl_model = None
 
         if self.args.rl_model is not None:
             state_dict = torch.load(self.args.rl_model)
@@ -323,7 +322,8 @@ class LocalizationNode:
 
         if self.perceptual_model != None:
             if self.args.update_pm_by == "NONE":
-                self.perceptual_model.eval()
+                # self.perceptual_model.eval()
+                self.perceptual_model.train()
             else:
                 self.perceptual_model.train()
 
@@ -462,7 +462,6 @@ class LocalizationNode:
         
         self.belief = torch.ones((self.grid_dirs,self.grid_rows, self.grid_cols),device=torch.device(self.device))
         self.belief = self.belief / self.belief.sum()
-        self.prior = self.belief.detach().cpu().numpy()
 
         self.bel_ent = (self.belief * torch.log(self.belief)).sum().detach()
         # self.bel_ent = np.log(1.0/(self.grid_dirs*self.grid_rows*self.grid_cols))
@@ -513,7 +512,7 @@ class LocalizationNode:
         self.obj_gtl = None
         self.obj_lik = None
         self.obj_bel = None
-        self.obj_bel_prior = None
+
         self.obj_bel_dist = None
         self.obj_gtl_dist = None
         self.obj_lik_dist = None
@@ -528,8 +527,6 @@ class LocalizationNode:
             i = 0
             dir_made=False
             while dir_made==False:
-                # self.log_dir = os.path.join(home, anl_loc, 'logs/', str_date_time+'-%02d'%i)
-                # self.log_dir = os.path.join(home, self.args.save_loc, str_date_time+'-%02d'%i)                
                 self.log_dir = os.path.join(self.args.save_loc, str_date_time+'-%02d'%i)                
                 try:
                     os.mkdir(self.log_dir)
@@ -707,17 +704,6 @@ class LocalizationNode:
                 self.update_true_grid()
             
 
-            ## Prior ##
-            # if self.args.figure:
-            #     ax=self.ax_prior 
-            #     self.update_prior_plot(ax)
-            #     ax=self.ax_map 
-            #     self.draw_robot(ax)
-            #     self.draw_bel(ax)
-            #     self.draw_collision(ax, self.collision)
-            #     ax=self.ax_pose 
-            #     self.update_pose_plot(ax)
-            #     plt.pause(1e-3)
 
             self.next_step()
             return
@@ -748,17 +734,17 @@ class LocalizationNode:
     def circular_placement(self, x, n):
         width = x.shape[2]
         height = x.shape[1]
-        N = (n/2+1)*max(width,height)
+        N = (n//2+1)*max(width,height)
         img = np.zeros((N,N))
         for i in range(n):
-            if i < n/4:
-                origin = (i, (n/4-i))
-            elif i < 2*n/4:
-                origin = (i, (i-n/4))
-            elif i < 3*n/4:
-                origin = (n-i, (i-n/4))
+            if i < n//4:
+                origin = (i, (n//4-i))
+            elif i < 2*n//4:
+                origin = (i, (i-n//4))
+            elif i < 3*n//4:
+                origin = (n-i, (i-n//4))
             else:
-                origin = (n-i, n+n/4-i)
+                origin = (n-i, n+n//4-i)
 
             ox = origin[0]*height
             oy = origin[1]*width
@@ -769,7 +755,7 @@ class LocalizationNode:
     def square_clock(self, x, n):
         width = x.shape[2]
         height = x.shape[1]
-        quater = n/4-1
+        quater = n//4-1
 
         #even/odd
         even = 1 - quater % 2
@@ -778,15 +764,15 @@ class LocalizationNode:
         img = np.zeros((N,N))
         
         for i in range(n):
-            s = (i+n/8)%n
-            if s < n/4:
-                org = (0, n/4-s)
-            elif s < n/2:
-                org = (s-n/4+even, 0)
-            elif s < 3*n/4:
-                org = (n/4+even, s-n/2+even)
+            s = (i+n//8)%n
+            if s < n//4:
+                org = (0, n//4-s)
+            elif s < n//2:
+                org = (s-n//4+even, 0)
+            elif s < 3*n//4:
+                org = (n//4+even, s-n//2+even)
             else:
-                org = (n/4-(s-3*n/4), n/4+even)
+                org = (n//4-(s-3*n//4), n//4+even)
             ox = org[0]*height
             oy = org[1]*width
             img[ox:ox+height, oy:oy+width] = x[i,:,:]
@@ -932,7 +918,6 @@ class LocalizationNode:
             self.ax_gtl =  plt.subplot(self.gridspec[2,1])
 
 
-            # self.ax_prior =  plt.subplot(self.gridspec[2,1])
             self.ax_pbel =  plt.subplot(self.gridspec[0,2:4])
             self.ax_plik =  plt.subplot(self.gridspec[1,2:4])
             self.ax_pgtl =  plt.subplot(self.gridspec[2,2:4])
@@ -1239,25 +1224,6 @@ class LocalizationNode:
         self.obj_bel.set_norm(norm = cm.Normalize().autoscale(bel))
 
 
-    def update_prior_plot(self,ax):
-
-        bel = np.copy(self.prior)
-        bel,side = self.square_clock(bel, self.grid_dirs)
-        if self.obj_bel_prior == None:
-            self.obj_bel_prior = ax.imshow(bel,interpolation='nearest')
-            ax.grid()
-            ticks = np.linspace(0,self.grid_rows*side, side,endpoint=False)-0.5
-            ax.set_yticks(ticks)
-            ax.set_xticks(ticks)
-            ax.tick_params(axis='y', labelleft='off')
-            ax.tick_params(axis='x', labelbottom='off')
-            ax.tick_params(bottom="off", left="off")
-            ax.set_title('Prior (%.3f)'%self.prior.max())
-        else:
-            self.obj_bel_prior.set_data(bel)
-            ax.set_title('Prior (%.3f)'%self.prior.max())
-
-        self.obj_bel_prior.set_norm(norm = cm.Normalize().autoscale(bel))
 
 
     def update_gtl_plot(self,ax):
@@ -1504,37 +1470,8 @@ class LocalizationNode:
 
 
     def clear_objects(self):
-        # rows = 4
-        # cols =5
-        # steps = [0.4, 0.4]
-        # for i,cyl in enumerate(self.cylinders):
-        #     name = cyl['name']
-        #     msg = LinkState()
-        #     msg.link_name = name
-        #     msg.pose.position.x = -4 - steps[0]*(i//cols)
-        #     msg.pose.position.y = 5 + steps[1]*(i%cols)
-        #     rospy.wait_for_service('/gazebo/set_link_state')
-        #     self.set_link_state(msg)
-        # rows = 5
-        # cols =20
-        # steps = [0.7, 0.2]
-        # for i,wal in enumerate(self.walls):
-        #     name = wal['name']
-        #     msg = LinkState()
-        #     msg.link_name = name
-        #     msg.pose.position.x = 4 + steps[0]*(i//cols)
-        #     msg.pose.position.y = -5 + steps[1]*(i%cols)
-        #     rospy.wait_for_service('/gazebo/set_link_state')
-        #     self.set_link_state(msg)
-        # msg = ModelState()
-        # msg.model_name = self.robot_model_name
-        # msg.pose.position.x = 0
-        # msg.pose.position.y = -5
-        # rospy.wait_for_service('/gazebo/set_model_state')
-        # self.set_model_state(msg)
         self.map_for_LM = np.zeros((self.map_rows, self.map_cols))
         self.map_for_pose = np.zeros((self.grid_rows, self.grid_cols),dtype='float')
-        # self.map_for_RL = torch.zeros((1,self.grid_rows, self.grid_cols),device=torch.device(self.device))
         self.map_for_RL = torch.zeros((1,self.args.n_state_grids, self.args.n_state_grids),device=torch.device(self.device))
         
         
@@ -1848,7 +1785,7 @@ class LocalizationNode:
         accum = 0
         procs = []
         for i_worker in range(min(self.args.n_workers, self.grid_dirs)):
-            n_dirs = self.grid_dirs/self.args.n_workers
+            n_dirs = self.grid_dirs//self.args.n_workers
             if i_worker < self.grid_dirs % self.args.n_workers:
                 n_dirs +=1
             my_dirs = range(accum, accum+n_dirs)
@@ -1881,7 +1818,7 @@ class LocalizationNode:
         accum = 0
         procs = []
         for i_worker in range(min(self.args.n_workers, self.grid_dirs)):
-            n_dirs = self.grid_dirs/self.args.n_workers
+            n_dirs = self.grid_dirs//self.args.n_workers
             if i_worker < self.grid_dirs % self.args.n_workers:
                 n_dirs +=1
             my_dirs = range(accum, accum+n_dirs)
@@ -1908,7 +1845,7 @@ class LocalizationNode:
         accum = 0
         procs = []
         for i_worker in range(min(self.args.n_workers, self.grid_dirs)):
-            n_dirs = self.grid_dirs/self.args.n_workers
+            n_dirs = self.grid_dirs//self.args.n_workers
             if i_worker < self.grid_dirs % self.args.n_workers:
                 n_dirs +=1
             my_dirs = range(accum, accum+n_dirs)
@@ -1958,7 +1895,7 @@ class LocalizationNode:
         scan = np.zeros(360)
         missing = np.random.choice(360, noise, replace=False)
         gaussian_noise = np.random.normal(scale=sigma, size=360)
-        for i_ray in xrange(0,360, scan_step):
+        for i_ray in range(0,360, scan_step):
             if fov and i_ray > self.args.fov[0] and i_ray < self.args.fov[1]:
                 scan[i_ray]=np.nan
                 continue
@@ -2005,7 +1942,7 @@ class LocalizationNode:
             col_hd = to_index(y_real, self.map_cols, ylim)  # from real to hd
             scan = np.zeros(360)
         
-            for i_ray in xrange(0,360, scan_step):
+            for i_ray in range(0,360, scan_step):
                 if fov and i_ray > self.args.fov[0] and i_ray < self.args.fov[1]:
                     scan[i_ray]=np.nan
                     continue
@@ -2068,7 +2005,7 @@ class LocalizationNode:
         
         accum = 0
         for worker in range(min(self.args.n_workers, n_places)):
-            n_myplaces = n_places/self.args.n_workers
+            n_myplaces = n_places//self.args.n_workers
             if worker < n_places % self.args.n_workers:
                 n_myplaces += 1
             range_place = range(accum, accum+n_myplaces)
@@ -2142,7 +2079,7 @@ class LocalizationNode:
         rows2 = self.args.n_local_grids
         cols2 = rows2
 
-        center=self.args.n_local_grids/2
+        center=self.args.n_local_grids//2
 
         if self.args.binary_scan:
             scan_2d_low = np.ceil(normalize(cv2.resize(scan_2d[0,:,:], (rows1, cols1),interpolation=cv2.INTER_AREA)))
@@ -2187,7 +2124,7 @@ class LocalizationNode:
         rows2 = self.args.n_local_grids
         cols2 = rows2
 
-        center=self.args.n_local_grids/2
+        center=self.args.n_local_grids//2
 
         if self.args.binary_scan:
             self.scan_2d_low = np.ceil(normalize(cv2.resize(self.scan_2d[0,:,:], (rows1, cols1),interpolation=cv2.INTER_AREA)))
@@ -2453,7 +2390,6 @@ class LocalizationNode:
         
     def product_belief(self):
         if self.args.verbose>1: print("product_belief")
-        # back up prior belief
 
         if self.args.use_gt_likelihood :
             # gt = torch.from_numpy(self.gt_likelihood/self.gt_likelihood.sum()).float().to(self.divice)
@@ -2534,7 +2470,7 @@ class LocalizationNode:
             belief_downsample = self.belief
         else:
             belief_downsample = np.zeros((self.args.n_state_dirs, self.args.n_state_grids, self.args.n_state_grids))
-            dirs = range(self.bel_grid.head%(self.grid_dirs/self.args.n_state_dirs),self.grid_dirs,self.grid_dirs/self.args.n_state_dirs)
+            dirs = range(self.bel_grid.head%(self.grid_dirs//self.args.n_state_dirs),self.grid_dirs,self.grid_dirs//self.args.n_state_dirs)
             for i,j in enumerate(dirs):
                 bel = self.belief[j,:,:].cpu().detach().numpy()
                 bel = cv2.resize(bel, (self.args.n_state_grids,self.args.n_state_grids))#,interpolation=cv2.INTER_NEAREST)
@@ -2547,7 +2483,7 @@ class LocalizationNode:
             likelihood_downsample = self.likelihood
         else:
             likelihood_downsample = np.zeros((self.args.n_state_dirs, self.args.n_state_grids, self.args.n_state_grids))
-            dirs = range(self.bel_grid.head%(self.grid_dirs/self.args.n_state_dirs),self.grid_dirs,self.grid_dirs/self.args.n_state_dirs)
+            dirs = range(self.bel_grid.head%(self.grid_dirs//self.args.n_state_dirs),self.grid_dirs,self.grid_dirs//self.args.n_state_dirs)
             for i,j in enumerate(dirs):
                 lik = self.likelihood[j,:,:].cpu().detach().numpy()
                 lik = cv2.resize(lik, (self.args.n_state_grids,self.args.n_state_grids))#,interpolation=cv2.INTER_NEAREST)
@@ -2960,12 +2896,10 @@ class LocalizationNode:
         if self.args.verbose>1: print("transit_belief")
         self.belief = self.belief.cpu().detach().numpy()
         if self.collision == True:
-            self.prior = np.copy(self.belief)
             self.belief = torch.from_numpy(self.belief).float().to(self.device)
             return
         self.belief=self.trans_bel(self.belief, self.action_str)
         self.belief = torch.from_numpy(self.belief).float().to(self.device)#$ requires_grad=True)
-        self.prior = np.copy(self.belief)
         
         
     def trans_bel(self, bel, action):
@@ -3243,8 +3177,6 @@ class LocalizationNode:
         self.belief[:,:,:]=1.0
         self.belief /= self.belief.sum()#np.sum(self.belief, dtype=float)
         self.bel_ent = (self.belief * torch.log(self.belief)).sum().detach()
-
-        self.prior = self.belief.detach().cpu().numpy()
 
         self.acc_epi_cnt +=1
         self.episode_count += 1
