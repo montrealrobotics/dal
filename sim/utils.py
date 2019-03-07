@@ -47,7 +47,7 @@ def create_circular_mask(h, w, center=None, radius=None, angle=None, thick=0):
 def square_clock(x, n):
     width = x.shape[2]
     height = x.shape[1]
-    quater = n/4-1
+    quater = n//4-1
 
     #even/odd
     even = 1 - quater % 2
@@ -56,15 +56,15 @@ def square_clock(x, n):
     img = np.zeros((N,N))
         
     for i in range(n):
-        s = (i+n/8)%n
-        if s < n/4:
-            org = (0, n/4-s)
-        elif s < n/2:
-            org = (s-n/4+even, 0)
-        elif s < 3*n/4:
-            org = (n/4+even, s-n/2+even)
+        s = (i+n//8)%n
+        if s < n//4:
+            org = (0, n//4-s)
+        elif s < n//2:
+            org = (s-n//4+even, 0)
+        elif s < 3*n//4:
+            org = (n//4+even, s-n//2+even)
         else:
-            org = (n/4-(s-3*n/4), n/4+even)
+            org = (n//4-(s-3*n//4), n//4+even)
         ox = org[0]*height
         oy = org[1]*width
         img[ox:ox+height, oy:oy+width] = x[i,:,:]

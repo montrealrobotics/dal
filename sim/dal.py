@@ -752,32 +752,32 @@ class LocalizationNode:
             img[ox:ox+height, oy:oy+width] = x[i,:,:]
         return img
         
-    def square_clock(self, x, n):
-        width = x.shape[2]
-        height = x.shape[1]
-        quater = n//4-1
+    # def square_clock(self, x, n):
+    #     width = x.shape[2]
+    #     height = x.shape[1]
+    #     quater = n//4-1
 
-        #even/odd
-        even = 1 - quater % 2
-        side = quater+2+even
-        N = side*max(width,height)
-        img = np.zeros((N,N))
+    #     #even/odd
+    #     even = 1 - quater % 2
+    #     side = quater+2+even
+    #     N = side*max(width,height)
+    #     img = np.zeros((N,N))
         
-        for i in range(n):
-            s = (i+n//8)%n
-            if s < n//4:
-                org = (0, n//4-s)
-            elif s < n//2:
-                org = (s-n//4+even, 0)
-            elif s < 3*n//4:
-                org = (n//4+even, s-n//2+even)
-            else:
-                org = (n//4-(s-3*n//4), n//4+even)
-            ox = org[0]*height
-            oy = org[1]*width
-            img[ox:ox+height, oy:oy+width] = x[i,:,:]
-        del x
-        return img, side
+    #     for i in range(n):
+    #         s = (i+n//8)%n
+    #         if s < n//4:
+    #             org = (0, n//4-s)
+    #         elif s < n//2:
+    #             org = (s-n//4+even, 0)
+    #         elif s < 3*n//4:
+    #             org = (n//4+even, s-n//2+even)
+    #         else:
+    #             org = (n//4-(s-3*n//4), n//4+even)
+    #         ox = org[0]*height
+    #         oy = org[1]*width
+    #         img[ox:ox+height, oy:oy+width] = x[i,:,:]
+    #     del x
+    #     return img, side
 
     def draw_compass(self, ax):
         cx = 0.9 * self.xlim[1]
@@ -1061,7 +1061,7 @@ class LocalizationNode:
         #     lik *= 0
         # lik -= lik.min()
         # lik /= lik.max()
-        lik, side = self.square_clock(lik, self.grid_dirs)
+        lik, side = square_clock(lik, self.grid_dirs)
         # lik=self.circular_placement(lik, self.grid_dirs)
         # lik = lik.reshape(self.grid_rows*self.grid_dirs,self.grid_cols) 
         # lik = np.swapaxes(lik,0,1)
@@ -1200,7 +1200,7 @@ class LocalizationNode:
         #     bel *= 0
         # bel -= bel.min()
         # bel /= bel.max()
-        bel,side = self.square_clock(bel, self.grid_dirs)
+        bel,side = square_clock(bel, self.grid_dirs)
         #bel=self.circular_placement(bel, self.grid_dirs)
         # bel = bel.reshape(self.grid_rows*self.grid_dirs,self.grid_cols) 
         # bel = np.swapaxes(bel,0,1)
@@ -1229,7 +1229,7 @@ class LocalizationNode:
     def update_gtl_plot(self,ax):
         # gtl = self.gt_likelihood.cpu().detach().numpy()
         gtl = self.gt_likelihood
-        gtl, side = self.square_clock(gtl, self.grid_dirs)
+        gtl, side = square_clock(gtl, self.grid_dirs)
         if self.obj_gtl == None:
             self.obj_gtl = ax.imshow(gtl,interpolation='nearest')
             ax.grid()
