@@ -26,7 +26,7 @@ pip3 install -e .
 ```
 
 ## Basic Usage
-For running OpenAI gym, you can just do `python main.py` (More instructions will come soon. meanwhile you can look at a2c_ppo_acktr/arguments.py)
+For running our gym environment (which we call `dal-v0`), you can just do `python main.py` (More instructions will come soon but the code and parameters used are mostly self explanatory. you can also look at a2c_ppo_acktr/arguments.py)
 
 ## Acknowledgements
 - Gazebo
