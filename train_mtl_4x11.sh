@@ -91,6 +91,13 @@ if [ $1 = test_with_gtl ]; then
     UPDATE=' -f --no-save --temp=0.1 -ugl '
 fi
 
+if [ $4 = simple ]; then
+    MAP_OPTIONS=' -bcm '
+fi
+
+if [ $4 = complex ]; then
+    MAP_OPTIONS=' --random-thickness --distort-map '
+fi
 
 # If you want to train without popping up the figure window but want to save the figures, uncomment:
 # MPLBACKEND='AGG' \
@@ -100,6 +107,7 @@ python sim/dal.py \
  --lidar-noise=10 \
  --lidar-sigma=.03 \
  --load-map=$MAP \
+ $MAP_OPTIONS \
  --map-pixel=0.039 \
  --sigma-xy=.5 --trans-belief=stoch-shift \
  --pm-scan-step=3 --gtl-src=hd-cos \
