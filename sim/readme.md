@@ -21,7 +21,7 @@ What each mode does:
 -`test_with_gtl`: loads a RL model and uses scan-matching with cosine similarity between pre-obtained scans and input scans
 
 
-# To run DAL simulation (dal.py) for training/evaluation on *random maze-like maps*
+## To run DAL simulation (dal.py) for training/evaluation on *random maze-like maps*
 
 from the parent folder `dal/`, run
 `sh train_mtl_4x11.sh [MODE] [N_EPISODE] [OUTPUT_DIR] [MAP_OPTION]`
