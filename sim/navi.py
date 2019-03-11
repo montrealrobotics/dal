@@ -137,7 +137,7 @@ def give_me_path(shortest_map, source, target, gridsize):
         current_coords = note
         grid_list.append(current_coords)
     grid_list.append(target)
-    print ('grid_list', grid_list)
+    # print ('grid_list', grid_list)
     return grid_list
 
 
@@ -145,7 +145,7 @@ def give_me_actions(grid_list, curr_dir):
     actions = []
     # curr_dir
     # prev_pos = grid_list[0]
-    print('len(grid_list)',len(grid_list))
+    # print('len(grid_list)',len(grid_list))
     for i in range(len(grid_list)-1):
         prev_pos = grid_list[i]
         next_pos = grid_list[i+1]
@@ -160,7 +160,7 @@ def give_me_actions(grid_list, curr_dir):
         else:
             next_dir = -1
         
-        print('next dir, curr dir', next_dir, curr_dir)
+        # print('next dir, curr dir', next_dir, curr_dir)
         if next_dir == -1:
             actions.append(3)
         elif abs(next_dir - curr_dir) == 0: 

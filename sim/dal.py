@@ -120,6 +120,7 @@ class Lidar():
 class LocalizationNode:
     def __init__(self, args):
 
+        self.next_action = None
         self.skip_to_end = False
         self.action_time = 0
         self.gtl_time = 0
@@ -322,8 +323,8 @@ class LocalizationNode:
 
         if self.perceptual_model != None:
             if self.args.update_pm_by == "NONE":
-                # self.perceptual_model.eval()
-                self.perceptual_model.train()
+                self.perceptual_model.eval()
+                # self.perceptual_model.train()
             else:
                 self.perceptual_model.train()
 
@@ -504,6 +505,7 @@ class LocalizationNode:
         self.obj_err = None
         self.obj_map = None
         self.obj_robot = None
+        self.obj_path = None
         self.obj_heading = None
         self.obj_robot_bel = None        
         self.obj_heading_bel = None
@@ -902,6 +904,21 @@ class LocalizationNode:
             self.obj_robot_bel.update({'center': [y,x]})
             self.obj_heading_bel.update({'xdata':xdata, 'ydata':ydata})
 
+    def draw_path(self, ax, path):
+        xy = [grid_cell_to_map_cell(via.x, via.y, self.grid_rows, self.map_rows) for via in path]
+        x = [ elem[1] for elem in xy]
+        y = [ elem[0] for elem in xy]
+        print (x, y)
+        if self.obj_path == None:
+            self.obj_path, = ax.plot(x, y, 'g:', alpha=0.5)
+            self.obj_goal, = ax.plot(x[-1], y[-1], 'r*', alpha=0.5)
+        else:
+            self.obj_path.set_xdata(x)
+            self.obj_path.set_ydata(y)
+            self.obj_goal.set_xdata(x[-1])
+            self.obj_goal.set_ydata(y[-1])
+
+        
     def init_figure(self):
         self.init_fig = True
         if self.args.figure == True:# and self.obj_fig==None:
@@ -2581,33 +2598,40 @@ class LocalizationNode:
             print ('generating maps')
             kernel = np.ones((3,3),np.uint8)
             navi_map = cv2.dilate(self.map_for_LM, kernel, iterations=self.cr_pixels+1)
-            self.ax_map.imshow(navi_map, alpha=0.3)
-            # plt.show()
-            self.map_to_N, self.map_to_E, self.map_to_S, self.map_to_W = generate_four_maps(navi_map, self.grid_rows, self.grid_cols)
+            if self.args.figure:
+                self.ax_map.imshow(navi_map, alpha=0.3)
 
-            # self.ax_map.imshow(self.map_to_E, alpha=0.5, interpolation='nearest')
-            # plt.figure()
-            # plt.subplot(2,2,1)
-            # plt.imshow(self.map_to_N)
-            # plt.subplot(2,2,2)
-            # plt.imshow(self.map_to_E)
-            # plt.subplot(2,2,3)
-            # plt.imshow(self.map_to_S)
-            # plt.subplot(2,2,4)
-            # plt.imshow(self.map_to_W)
-            # plt.show()
+            self.map_to_N, self.map_to_E, self.map_to_S, self.map_to_W = generate_four_maps(navi_map, self.grid_rows, self.grid_cols)
             
         bel_cell = Cell(self.bel_grid.row, self.bel_grid.col)
-        print (self.bel_grid)
+        # print (self.bel_grid)
         self.target_cell = Cell(self.args.navigate_to[0],self.args.navigate_to[1])
         distance_map = compute_shortest(self.map_to_N,self.map_to_E,self.map_to_S,self.map_to_W, bel_cell, self.target_cell, self.grid_rows)
-        print (distance_map)
+        # print (distance_map)
         shortest_path = give_me_path(distance_map, bel_cell, self.target_cell, self.grid_rows)
+        if self.args.figure:
+            self.draw_path(self.ax_map, shortest_path)
+            
         action_list = give_me_actions(shortest_path, self.bel_grid.head)
         self.action_from_policy = action_list[0]
-        print ('actions', action_list)
-        self.action_str = self.action_space[self.action_from_policy]
-        
+        # print ('actions', action_list)
+        if self.next_action is None:
+            self.action_str = self.action_space[self.action_from_policy]
+        else:
+            self.action_from_policy = self.next_action
+            self.action_str = self.action_space[self.next_action]
+            self.next_action = None
+            
+        if self.action_str == 'go_fwd' and  self.collision_fnc(0, 0, 0, self.scan_2d_slide):
+            self.action_from_policy = np.random.randint(2)
+            self.action_str = self.action_space[self.action_from_policy]
+            self.next_action = 2
+        else:
+            self.next_action = None
+            
+        if self.action_str == "hold":
+            self.skip_to_end = True
+            self.step_count = self.step_max -1
 
     def sample_action(self):
         if self.args.manual_control:
@@ -3413,7 +3437,7 @@ if __name__ == '__main__':
     parser.add_argument("--load-map-RL", help = "load an actual map for RL state", type=str, default=None)
     parser.add_argument("--map-pixel", help = "size of a map pixel in real world (meters)", type=float, default=6.0/224.0)
     #parser.add_argument("--maze-grids-range", type=int, nargs=2, default=[None, None])
-    parser.add_argument("--n-maze-grids", type=int, nargs='+', default=[5,11])
+    parser.add_argument("--n-maze-grids", type=int, nargs='+', default=[11])
     parser.add_argument("--n-local-grids", type=int, default=11)
     parser.add_argument("--n-state-grids", type=int, default=11)
     parser.add_argument("--n-state-dirs", type=int, default=4)

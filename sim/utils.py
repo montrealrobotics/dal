@@ -126,33 +126,37 @@ def fill_outer_rim(img, rows, cols):
     for i in range(rows):
         j = 0
         while img[i,j] == 0:
+            # print (i,j,img[i,j])
             img[i,j] = 1.0
             j = j+1
-            if j>=cols:
+            if j>min(i,rows-i):
                 break
 
     for i in range(rows):
         j = -1
         while img[i,j] == 0:
+            # print (i,j,img[i,j])            
             img[i,j] = 1.0
             j = j-1
-            if j < -cols:
+            if j < -min(i,rows-i):
                 break
             
     for j in range(cols):
         i = 0
         while img[i,j] == 0:
+            # print (i,j,img[i,j])            
             img[i,j] = 1.0
             i = i + 1
-            if i >= rows:
+            if i > min(j, cols-j):
                 break
 
     for j in range(cols):
         i = -1
         while img[i,j] == 0:
+            # print (i,j,img[i,j])            
             img[i,j] = 1.0
             i = i - 1
-            if i < -rows:
+            if i < -min(j, cols-j):
                 break
     return img
     
