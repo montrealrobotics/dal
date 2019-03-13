@@ -9,6 +9,7 @@
 Create folder `LM` under `dal` and download trained likelihood models 
 - 11x11 grids: https://tinyurl.com/SharonCarter-Densenet121-11x11
 - 33x33 grids: https://tinyurl.com/densenet201-SpiderMan
+
 or you can start from a scratch.
 
 From the parent folder `dal/`, 
