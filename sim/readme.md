@@ -6,7 +6,12 @@
 
 ## To run the simulation (`dal.py`) for training/evaluation on the *SAIT* map
 
-from the parent folder `dal/`, 
+Create folder `LM` under `dal` and download trained likelihood models 
+- 11x11 grids: https://tinyurl.com/SharonCarter-Densenet121-11x11
+- 33x33 grids: https://tinyurl.com/densenet201-SpiderMan
+or you can start from a scratch.
+
+From the parent folder `dal/`, 
 run `sh run_sait_map.sh [GRIDS] [DIRS] [MODE] [N_EPISODE] [OUTPUT-DIR]`
 where
 - `GRIDS`: choose 11 or 33, and the script will load the trained models accordingly
