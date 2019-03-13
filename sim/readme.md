@@ -13,7 +13,7 @@ Create folder `LM` under `dal` and download trained likelihood models
 or you can start from a scratch.
 
 From the parent folder `dal/`, 
-run `sh run_sait_map.sh [GRIDS] [DIRS] [MODE] [N_EPISODE] [OUTPUT-DIR]`
+run ``sh run_sait_map.sh [GRIDS] [DIRS] [MODE] [N_EPISODE] [OUTPUT-DIR]``
 where
 - `GRIDS`: choose 11 or 33, and the script will load the trained models accordingly
 - `DIRS`: Number of directions. Recommend trying with one of 4,8,12,16,24,36.
