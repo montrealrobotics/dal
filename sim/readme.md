@@ -20,11 +20,11 @@ where
 - `MODE`: can be one of the following: `test`, `train_both`, `train_lm`, `train_rl`, `aml`, `test-navi`, `test_with_gtl`
 
 What each mode does:
--`test`: loads trained models and does DAL. 
--`test-navi`: loads trained models and does DAL and also navigation to a goal pose. You can change the coordinates for the goal from `run_sait_map.sh`.
--`train_lm`, `train_rl`, `train_both`: trains LM, RL and both, respectively
--`aml`: runs Active Markov Localization
--`test_with_gtl`: loads a RL model and uses scan-matching with cosine similarity between pre-obtained scans and input scans
+- `test`: loads trained models and does DAL. 
+- `test-navi`: loads trained models and does DAL and also navigation to a goal pose. You can change the coordinates for the goal from `run_sait_map.sh`.
+- `train_lm`, `train_rl`, `train_both`: trains LM, RL and both, respectively
+- `aml`: runs Active Markov Localization
+- `test_with_gtl`: loads a RL model and uses scan-matching with cosine similarity between pre-obtained scans and input scans
 
 
 ## To run DAL simulation (dal.py) for training/evaluation on *random maze-like maps*
