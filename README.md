@@ -12,7 +12,11 @@ Requirements:
 
 Please use this bibtex if you want to cite this repository in your publications:
 ```
-coming soon
+@inproceedings{Krishna2019DeepAL,
+  title={Deep Active Localization},
+  author={Sai Krishna and Keehong Seo and Dhaivat Bhatt and Vincent Mai and Krishna Murthy and Liam Paull},
+  year={2019}
+}
 ```
 
 ## Installation
