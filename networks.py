@@ -8,6 +8,8 @@ import numpy as np
 import pdb
 from a2c_ppo_acktr.distributions import Categorical, DiagGaussian, Bernoulli
 from a2c_ppo_acktr.utils import init
+from utils import init_normc_
+
 
 def normalized_columns_initializer(weights, std=1.0):
 	out = torch.randn(weights.size())
@@ -783,3 +785,29 @@ class perceptual_conv_real_224_l1(nn.Module):
 			x = self.relu5(x)
  
 		return x
+
+class RewardModel(nn.Module):
+    def __init__(self, state_dim, action_dim, h1, h2):
+        super().__init__()
+        input_dim = state_dim + action_dim
+
+        init_ = lambda m: init(m,
+                               init_normc_,
+                               lambda x: nn.init.constant_(x, 0))
+
+        self.fc = nn.Sequential(
+            init_(nn.Linear(input_dim, h1)),
+            nn.LeakyReLU(),
+            init_(nn.Linear(h1, h2)),
+            nn.LeakyReLU(),
+            init_(nn.Linear(h2, 1)),
+            nn.LeakyReLU()
+        )
+
+    def forward(self, obs, action):
+        # action = action.type(torch.cuda.FloatTensor)
+        # action = action.float()
+        obs = obs.view(1, -1)
+        print("shape of obs, action = ", obs.shape, action.shape)
+        x = self.fc(torch.cat([obs, action], dim=1))
+        return x
