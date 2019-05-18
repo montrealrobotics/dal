@@ -9,6 +9,7 @@ Requirements:
 - Pytorch 1.0
 - OpenAI Gym
 - Numpy
+- tensorboardX
 
 Please use this bibtex if you want to cite this repository in your publications:
 ```
