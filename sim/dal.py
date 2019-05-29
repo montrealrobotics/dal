@@ -3419,7 +3419,7 @@ if __name__ == '__main__':
     parser.add_argument("-c", "--comment", help="your comment", type=str, default='')
     parser.add_argument("--gazebo", "-gz", action="store_true")
     parser.add_argument("--jay1", "-j1", action="store_true")
-    parser.add_argument("--save-loc", type=str, default=os.environ['TB3_LOG']) #"tb3_anl/logs")
+    parser.add_argument("--save-loc", type=str) #"tb3_anl/logs")
     parser.add_argument("--generate-data", action="store_true")
     parser.add_argument("--n-workers", "-nw", type=int, default=multiprocessing.cpu_count())
 

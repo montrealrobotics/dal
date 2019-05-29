@@ -78,6 +78,8 @@ class Lidar():
 class LocalizationNode:
     def __init__(self):
         args = get_args()
+
+        ## For storing informative tensor board logs, and trained models
         self.writer = SummaryWriter(log_dir='runs3a_224/'
             + 'lrpm0_' + str(args.lrpm0)+'_' 
             + 'lrpm1_' + str(args.lrpm1)+'_'
@@ -112,6 +114,7 @@ class LocalizationNode:
         self.likeli_model_l1 = perceptual_conv_real_224_l1(self.layers1)
        
         args.gpu = True
+        # use GPU if available
         if args.gpu == True and torch.cuda.is_available():
             self.device = torch.device("cuda")
             torch.set_default_tensor_type(torch.cuda.FloatTensor)
@@ -127,7 +130,11 @@ class LocalizationNode:
             print ("Use CPU")
 
         self.optimizer0 = torch.optim.Adam(list(self.likeli_model_l0.parameters()), lr=args.lrpm0)
+
+        ## you can choose to update level-0 parameters in the same optimizer. 
         self.optimizer1 = torch.optim.Adam(list(self.likeli_model_l1.parameters())+list(self.likeli_model_l0.parameters()), lr=args.lrpm1)
+        
+        ## loss function. 
         if self.criti == 'mse':
             self.criterion = nn.MSELoss()
         elif self.criti == 'kld':
@@ -136,14 +143,6 @@ class LocalizationNode:
         self.args = args
         self.start_time = time.time()
 
-        #if self.args.gpu == True and torch.cuda.is_available():
-        if (self.args.gpu) and torch.cuda.is_available():
-            self.device = torch.device("cuda" )
-            torch.set_default_tensor_type(torch.cuda.FloatTensor)
-        else:
-            self.device = torch.device("cpu")
-            torch.set_default_tensor_type(torch.FloatTensor)
-        
         self.grid_rows, self.grid_cols, self.grid_dirs = 11, 11, 4
         
         self.map_rows, self.map_cols = 224, 224 
@@ -151,12 +150,13 @@ class LocalizationNode:
         self.max_scan_range = 3.5
         self.min_scan_range = 0.1
         
-        self.map_2d = np.load('/home/sai/tb3-anl/dal/env_map.npy')
-        self.map_2d = (255 - self.map_2d)/255
+        self.map_2d = np.load('/home/sai/tb3-anl/dal/env_map.npy') #Load your map here
+        
+        self.map_2d = (255 - self.map_2d)/255 # You can comment out the following line depending on how you saved your map, or do the required preprocessing
+        
+
         self.taken = np.arange(self.map_2d.size)[self.map_2d.flatten()==1]
-        # self.laser_1d = None
-
-
+        
         self.xlim = (-self.args.xlim, self.args.xlim)
         self.ylim = (-self.args.xlim, self.args.xlim)
         
@@ -184,7 +184,6 @@ class LocalizationNode:
         
         self.turtle_loc = np.zeros((self.map_rows,self.map_cols))
 
-        # what to do
         # current pose: where the robot really is. motion incurs errors in pose
         self.current_pose = Pose2d(0,0,0)
         self.goal_pose = Pose2d(0,0,0)
@@ -199,10 +198,12 @@ class LocalizationNode:
     def loop(self): 
         
         self.map_2d = np.load('/home/sai/tb3-anl/dal/env_map.npy')
+        ## Uncomment the following 2 lines if you haven't saved the scans_over_map at high resolution before
         # self.get_synth_scan()
         # np.save('/home/sai/montreal_synth_scan.npy', self.scans_over_map_high)
         self.scans_over_map_high = np.load('/home/sai/montreal_synth_scan.npy')
 
+        ## getting locations where turtle can be placed
         turtle_can = [ltc for ltc in range(self.map_rows*self.map_cols) if ltc not in self.taken]
 
         ## Perumtation of possible locations(so that we access random locations for each map
@@ -210,8 +211,6 @@ class LocalizationNode:
         
         for btc in range(100): #epochs        
 
-            ## getting locations where turtle can be placed
-            
             ## Get first n random locations and save the six variables
             my_input = np.zeros((self.batch_size, 5, 224, 224))
             gt_likli_low_train = np.zeros((self.batch_size, 4, 11, 11))
@@ -219,7 +218,7 @@ class LocalizationNode:
             for j in range(int(turtle_can.shape[0]/self.batch_size)):
                 for i in range(self.batch_size): #batch_size
 
-                # new turtle location (random)
+                    # new turtle location (random)
                     turtle_bin = turtle_can[j*self.batch_size +  i]
 
                     self.true_grid.row = turtle_bin//self.map_rows
@@ -289,17 +288,14 @@ class LocalizationNode:
         if self.args.gtl_output == "softmax":
             gt = softmax(gt, self.args.temperature)
             gt_high = softmax(gt_high, self.args.temperature)
-            # gt = torch.from_numpy(softmax(gt)).float().to(self.device)
         elif self.args.gtl_output == "softermax":
             gt = softermax(gt)
             gt_high = softermax(gt_high)
-            # gt = torch.from_numpy(softmin(gt)).float().to(self.device)
         elif self.args.gtl_output == "linear":
             gt = np.clip(gt, 1e-5, 1.0)
             gt_high = np.clip(gt_high, 1e-5, 1.0)
             gt=gt/gt.sum()
             gt_high = gt_high/gt_high.sum()
-            # gt = torch.from_numpy(gt/gt.sum()).float().to(self.device)
         self.gt_likelihood = torch.tensor(gt).float().to(self.device)
         self.gt_likelihood_high = torch.tensor(gt_high).float().to(self.device)
         
@@ -538,6 +534,8 @@ class LocalizationNode:
         self.likelihood = self.likelihood/self.likelihood.sum()
 
     def get_lidar(self):
+        
+        ## scan data from current pose (possibly perturbed)
         ranges = self.get_a_scan(self.current_pose.x, self.current_pose.y, offset=self.current_pose.theta)
         bearing_deg = np.arange(360.0)
         mindeg=0
@@ -583,21 +581,21 @@ class LocalizationNode:
         
         output0 = self.likeli_model_l0(input_batch0)
 
-        bs, a,b,c = output0.shape
+        bs, a,b,c = output0.shape # get the output shape
         u = torch.reshape(output0, (-1, a*b*c))
-        _, idx = torch.topk(output0.view(output0.shape[0], -1), dim=-1, k=self.cells)
+        _, idx = torch.topk(output0.view(output0.shape[0], -1), dim=-1, k=self.cells) 
         x = idx/(b*c)
         y = (idx%(b*c))/b
         z = (idx%(b*c))%c
 
         output1 = torch.zeros((bs, 4, 224, 224))
-        # output1 = output1/torch.sum(output1)
         for btc in range(self.cells):
-            scan_cut = torch.ones((bs, 4, 160, 160))
-            map_cut = torch.ones((bs, 160, 160))
+            scan_cut = torch.zeros((bs, 4, 160, 160))
+            map_cut = torch.zeros((bs, 160, 160))
             for eth in range(bs):
                 dire, row, col = x[eth,btc], y[eth,btc], z[eth,btc]
-                # print("dire, row, col = ", dire, row, col)
+                
+                ## Cut a square patch of size 160x160 around (row, col). If the patch is going beyond map size, then cut it at the boundaries. 
                 if row*20 - 80 >= 0:
                     row_min = row*20 - 80
                 else:
@@ -626,17 +624,21 @@ class LocalizationNode:
             weight = output0[:,dire,row,col].unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
             output1[:, :, row*20:(row+1)*20, col*20:(col+1)*20] = weight *output_cut
 
+        ## loss for level-0
         loss0 = self.criterion(output0, target_batch0)
         if self.criti == 'kld':
             loss0 = abs(loss0)
         loss0.backward(retain_graph=True)
         self.optimizer0.step()
 
+        ## loss for level-1
         loss1 = self.criterion(output1, target_batch1)
         if self.criti == 'kld':
             loss1 = abs(loss1)
         loss1.backward()
         self.optimizer1.step()
+
+        ## Tensor board logging
         self.writer.add_scalar('loss0', loss0, i)
         self.writer.add_scalar('loss1', loss1, i)
         print(loss0, loss1)
