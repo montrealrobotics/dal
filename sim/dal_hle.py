@@ -462,7 +462,7 @@ class LocalizationNode:
         self.gt_likelihood = np.ones((self.grid_dirs,self.grid_rows,self.grid_cols))
         self.gt_likelihood_unnormalized = np.ones((self.grid_dirs,self.grid_rows,self.grid_cols))
         self.gt_likelihood_high = np.ones((self.grid_dirs, self.map_rows, self.map_cols))
-        self.gt_likelihood_high_unnormalized = np.ones((self.grid_dirs, self.map_rows, self.map_cols))        
+        self.gt_likelihood_unnormalized_high = np.ones((self.grid_dirs, self.map_rows, self.map_cols))        
         
         self.belief = torch.ones((self.grid_dirs,self.grid_rows, self.grid_cols),device=torch.device(self.device))
         self.belief = self.belief / self.belief.sum()
@@ -515,11 +515,13 @@ class LocalizationNode:
         self.obj_pose = None
         self.obj_scan = None
         self.obj_gtl = None
+        self.obj_gtl_high = None
         self.obj_lik = None
         self.obj_bel = None
 
         self.obj_bel_dist = None
         self.obj_gtl_dist = None
+        self.obj_gtl_dist_high = None        
         self.obj_lik_dist = None
 
         self.obj_collision = None
@@ -596,7 +598,7 @@ class LocalizationNode:
 
             if self.args.gtl_off == False:
                 self.get_synth_scan_mp(self.scans_over_map, map_img=self.map_for_LM, xlim=self.xlim, ylim=self.ylim) # generate synthetic scan data over the map (and directions)
-                self.get_synth_scan_high_mp(self.scans_over_map_high, map_img=self.map_for_LM, xlim=self.xlim, ylim=self.ylim)
+                self.get_synth_scan_mp_high(self.scans_over_map_high, map_img=self.map_for_LM, xlim=self.xlim, ylim=self.ylim)
 
             self.reset_explored()
             if self.args.init_pose is not None:
@@ -951,7 +953,7 @@ class LocalizationNode:
             self.obj_fig = plt.figure(figsize=(16,12))
             plt.set_cmap('viridis')
 
-            self.gridspec = gridspec.GridSpec(3,5)
+            self.gridspec = gridspec.GridSpec(4,5)
             self.ax_map = plt.subplot(self.gridspec[0,0])
             self.ax_scan = plt.subplot(self.gridspec[1,0])
             self.ax_pose =  plt.subplot(self.gridspec[2,0])
@@ -959,11 +961,13 @@ class LocalizationNode:
             self.ax_bel =  plt.subplot(self.gridspec[0,1])
             self.ax_lik =  plt.subplot(self.gridspec[1,1])
             self.ax_gtl =  plt.subplot(self.gridspec[2,1])
+            self.ax_gtl_high =  plt.subplot(self.gridspec[3,1])            
 
 
             self.ax_pbel =  plt.subplot(self.gridspec[0,2:4])
             self.ax_plik =  plt.subplot(self.gridspec[1,2:4])
             self.ax_pgtl =  plt.subplot(self.gridspec[2,2:4])
+            self.ax_pgtl_high =  plt.subplot(self.gridspec[3,2:4])
 
             self.ax_act = plt.subplot(self.gridspec[0,4])
             self.ax_rew = plt.subplot(self.gridspec[1,4])
@@ -1022,6 +1026,8 @@ class LocalizationNode:
         else:
             ax=self.ax_gtl 
             self.update_gtl_plot(ax)
+            ax=self.ax_gtl_high
+            self.update_gtl_plot_high(ax)
 
         ## BELIEF ##
         ax=self.ax_bel 
@@ -1035,6 +1041,8 @@ class LocalizationNode:
         self.update_bel_dist(ax)
         ax=self.ax_pgtl 
         self.update_gtl_dist(ax)
+        ax=self.ax_pgtl_high
+        self.update_gtl_dist_high(ax)        
         ax=self.ax_plik 
         self.update_lik_dist(ax)
 
@@ -1207,12 +1215,9 @@ class LocalizationNode:
     def update_gtl_dist(self,ax):
         # y = (self.gt_likelihood.cpu().detach().numpy().flatten())
         y = self.gt_likelihood.flatten()
-        y_high = self.gt_likelihood_high.flatten()
         if self.obj_gtl_dist == None:
             x = range(y.size)
-            x_high = range(y_high.size)
             self.obj_gtl_dist, = ax.plot(x,y,'.')
-            self.obj_gtl_dist_high, = 
             self.obj_gtl_max, = ax.plot(np.argmax(y), np.max(y), 'rx')
             ax.set_ylim([0, y.max()*2])
             # ax.set_ylabel('GTL')
@@ -1222,6 +1227,23 @@ class LocalizationNode:
             self.obj_gtl_dist.set_ydata(y)
             self.obj_gtl_max.set_ydata(np.max(y))
             self.obj_gtl_max.set_xdata(np.argmax(y))
+            ax.set_ylim([0, y.max()*2])
+
+    def update_gtl_dist_high(self,ax):
+        # y = (self.gt_likelihood.cpu().detach().numpy().flatten())
+        y = self.gt_likelihood_high.flatten()
+        if self.obj_gtl_dist_high == None:
+            x = range(y.size)
+            self.obj_gtl_dist_high, = ax.plot(x,y,'.')
+            self.obj_gtl_max_high, = ax.plot(np.argmax(y), np.max(y), 'rx')
+            ax.set_ylim([0, y.max()*2])
+            # ax.set_ylabel('GTL')
+            # ax.set_xlabel('Pose')
+            ax.set_title("GTL")
+        else:
+            self.obj_gtl_dist_high.set_ydata(y)
+            self.obj_gtl_max_high.set_ydata(np.max(y))
+            self.obj_gtl_max_high.set_xdata(np.argmax(y))
             ax.set_ylim([0, y.max()*2])
 
     def update_lik_dist(self,ax):
@@ -1289,6 +1311,25 @@ class LocalizationNode:
         else:
             self.obj_gtl.set_data(gtl)
         self.obj_gtl.set_norm(norm = cm.Normalize().autoscale(gtl))
+
+
+    def update_gtl_plot_high(self,ax):
+        # gtl = self.gt_likelihood.cpu().detach().numpy()
+        gtl = self.gt_likelihood_high
+        gtl, side = square_clock(gtl, self.grid_dirs)
+        if self.obj_gtl_high == None:
+            self.obj_gtl_high = ax.imshow(gtl,interpolation='nearest')
+            ax.grid()
+            ticks = np.linspace(0,self.map_rows*side, side,endpoint=False)-0.5
+            ax.set_yticks(ticks)
+            ax.set_xticks(ticks)
+            ax.tick_params(axis='y', labelleft='off')
+            ax.tick_params(axis='x', labelbottom='off')
+            ax.tick_params(bottom="off", left="off")
+            ax.set_title('Target Likelihood')
+        else:
+            self.obj_gtl_high.set_data(gtl)
+        self.obj_gtl_high.set_norm(norm = cm.Normalize().autoscale(gtl))
 
 
     def report_status(self,end_episode=False):
@@ -1758,6 +1799,23 @@ class LocalizationNode:
         self.gt_likelihood = gt
 
 
+    def normalize_gtl_high(self):
+        gt = self.gt_likelihood_high
+        self.gt_likelihood_unnormalized_high = np.copy(self.gt_likelihood_high)
+        if self.args.gtl_output == "softmax":
+            gt = softmax(gt, 1.0) # self.args.temperature)
+            # gt = torch.from_numpy(softmax(gt)).float().to(self.device)
+        elif self.args.gtl_output == "softermax":
+            gt = softermax(gt)
+            # gt = torch.from_numpy(softmin(gt)).float().to(self.device)
+        elif self.args.gtl_output == "linear":
+            gt = np.clip(gt, 1e-5, 1.0)
+            gt=gt/gt.sum()
+            # gt = torch.from_numpy(gt/gt.sum()).float().to(self.device)
+        # self.gt_likelihood = torch.tensor(gt).float().to(self.device)
+        self.gt_likelihood_high = gt
+
+
     def get_gtl_cos_mp(self, ref_scans, scan_data, my_dirs, return_dict):
         chk_rad = 0.05
         offset = 360.0/self.grid_dirs
@@ -1770,6 +1828,29 @@ class LocalizationNode:
             for i_ld in range(self.grid_rows):
                 for j_ld in range(self.grid_cols):
                     if self.collision_fnc(to_real(i_ld, self.xlim, self.grid_rows), to_real(j_ld, self.ylim, self.grid_cols), chk_rad, self.map_for_LM):
+                    # if self.map_for_pose[i_ld, j_ld]>0.4:
+                        gtl[i_ld,j_ld]=0.0
+                    else:
+                        x = X[i_ld,j_ld,:]
+                        x = np.clip(x, self.min_scan_range, self.max_scan_range)
+                        # x = np.clip(x, self.min_scan_range, np.inf)                        
+                        gtl[i_ld,j_ld] = self.get_cosine_sim(x,y)
+            ###
+            return_dict[heading] = {'gtl': gtl}
+
+
+    def get_gtl_cos_mp_high(self, ref_scans, scan_data, my_dirs, return_dict):
+        chk_rad = 0.05
+        offset = 360.0/self.grid_dirs
+        y= np.array(scan_data.ranges_2pi)[::self.args.pm_scan_step]
+        y = np.clip(y, self.min_scan_range, self.max_scan_range)
+        # y = np.clip(y, self.min_scan_range, np.inf)
+        for heading in my_dirs:
+            X = np.roll(ref_scans, -int(offset*heading),axis=2)[:,:,::self.args.pm_scan_step]
+            gtl = np.zeros((self.map_rows, self.map_cols))
+            for i_ld in range(self.map_rows):
+                for j_ld in range(self.map_cols):
+                    if self.collision_fnc(to_real(i_ld, self.xlim, self.map_rows), to_real(j_ld, self.ylim, self.map_cols), chk_rad, self.map_for_LM):
                     # if self.map_for_pose[i_ld, j_ld]>0.4:
                         gtl[i_ld,j_ld]=0.0
                     else:
@@ -1869,8 +1950,8 @@ class LocalizationNode:
             my_dirs = range(accum, accum+n_dirs)
             accum += n_dirs
             if len(my_dirs)>0:
-                pro = multiprocessing.Process(target = self.get_gtl_cos_mp,
-                                          args = [ref_scans, scan_data, my_dirs, return_dict_high])
+                pro = multiprocessing.Process(target = self.get_gtl_cos_mp_high,
+                                          args = [ref_scans, scan_data, my_dirs, return_dict])
                 procs.append(pro)
 
         [pro.start() for pro in procs]
@@ -1878,8 +1959,8 @@ class LocalizationNode:
 
         gtl = np.ones((self.grid_dirs,self.map_rows,self.map_cols))
         for i in range(self.grid_dirs):
-            ret = return_dict_high[i]    
-            gtl[i,:,:] = ret['gtl_high']
+            ret = return_dict[i]    
+            gtl[i,:,:] = ret['gtl']
         return gtl
 
             
@@ -2072,6 +2153,50 @@ class LocalizationNode:
             return_dict[i_place]={'scan':scan}
 
         
+    def get_a_scan_mp_high(self, range_place, return_dict, offset=0, scan_step=1, map_img=None, xlim=None, ylim=None, fov=False):
+
+        for i_place in range_place:
+        #class member variables: map_rows, map_cols, xlim, ylim, min_scan_range, max_scan_range, map_2d
+            row_ld = i_place // self.map_cols
+            col_ld = i_place %  self.map_cols
+            x_real = to_real(row_ld, xlim, self.map_rows ) # from low-dim location to real
+            y_real = to_real(col_ld, ylim, self.map_cols ) # from low-dim location to real
+            row_hd = to_index(x_real, self.map_rows, xlim)  # from real to hd
+            col_hd = to_index(y_real, self.map_cols, ylim)  # from real to hd
+            scan = np.zeros(360)
+        
+            for i_ray in range(0,360, scan_step):
+                if fov and i_ray > self.args.fov[0] and i_ray < self.args.fov[1]:
+                    scan[i_ray]=np.nan
+                    continue
+                else:
+                    pass
+                
+                theta = math.radians(i_ray)+offset
+                dist = self.min_scan_range
+                while True:
+                    if dist >= self.max_scan_range: 
+                        dist = np.inf
+                        break
+                    x_probe = x_real + dist * np.cos(theta)
+                    y_probe = y_real + dist * np.sin(theta)
+                    # see if there's something
+                    i_hd_prb = to_index(x_probe, self.map_rows, xlim)
+                    j_hd_prb = to_index(y_probe, self.map_cols, ylim)
+                    if i_hd_prb < 0 or i_hd_prb >= self.map_rows: 
+                        dist = np.inf
+                        break
+                    if j_hd_prb < 0 or j_hd_prb >= self.map_cols: 
+                        dist = np.inf
+                        break
+                    if map_img[i_hd_prb, j_hd_prb] >= 0.5: 
+                        break
+                    dist += 0.01+0.01*(np.random.rand())
+                scan[i_ray]=dist
+            #return scan
+            return_dict[i_place]={'scan':scan}
+
+        
     # def get_synth_scan(self):
     #     # start_time = time.time()                
     #     # place sensor at a location, then reach out in 360 rays all around it and record when each ray gets hit.
@@ -2131,7 +2256,7 @@ class LocalizationNode:
 
 
 
-    def get_synth_scan_high_mp(self, scans_high, map_img=None, xlim=None, ylim=None):
+    def get_synth_scan_mp_high(self, scans_high, map_img=None, xlim=None, ylim=None):
 
         # print (multiprocessing.cpu_count())
         # start_time = time.time()    
@@ -2151,7 +2276,7 @@ class LocalizationNode:
             accum += n_myplaces
 
             kwargs = {'scan_step': self.args.pm_scan_step, 'map_img':map_img, 'xlim':xlim, 'ylim':ylim, 'fov':False}
-            pro = multiprocessing.Process(target = self.get_a_scan_mp, args = [range_place, return_dict ], kwargs = kwargs)
+            pro = multiprocessing.Process(target = self.get_a_scan_mp_high, args = [range_place, return_dict ], kwargs = kwargs)
             procs.append(pro)
 
         [pro.start() for pro in procs]
@@ -2164,8 +2289,8 @@ class LocalizationNode:
             rd = return_dict[i_place]
             scan = rd['scan']
             # scans [i_place, :] = np.clip(scan, self.min_scan_range, self.max_scan_range)
-            row_ld = i_place // self.grid_cols
-            col_ld = i_place %  self.grid_cols
+            row_ld = i_place // self.map_cols
+            col_ld = i_place %  self.map_cols
             # scans[row_ld, col_ld,:] = np.clip(scan, self.min_scan_range, np.inf)            
             scans_high[row_ld, col_ld,:] = np.clip(scan, self.min_scan_range, self.max_scan_range)
             self.scans_over_map_high[row_ld, col_ld,:] = np.clip(scan, self.min_scan_range, self.max_scan_range)
@@ -2397,6 +2522,26 @@ class LocalizationNode:
                 raise Exception('GTL source required: --gtl-src= [low-dim-map, high-dim-map]')
             self.normalize_gtl()
 
+
+    def compute_gtl_high(self, ref_scans):
+        if self.args.gtl_off == True:
+            gt = np.random.rand(self.grid_dirs, self.map_rows, self.map_cols)
+            gt = np.clip(gt, 1e-5, 1.0)
+            gt=gt/gt.sum()
+            self.gt_likelihood_high = gt
+            # self.gt_likelihood = torch.tensor(gt).float().to(self.device)
+        else:
+            if self.args.gtl_src == 'hd-corr':
+                self.get_gt_likelihood_corr(ref_scans, clip=0)
+            elif self.args.gtl_src == 'hd-corr-clip':
+                self.get_gt_likelihood_corr(ref_scans, clip=1)
+            elif self.args.gtl_src == 'hd-cos':
+                self.gt_likelihood_high = self.get_gt_likelihood_cossim_high(ref_scans, self.scan_data_at_unperturbed)
+            else:
+                raise Exception('GTL source required: --gtl-src= [low-dim-map, high-dim-map]')
+            self.normalize_gtl_high()
+            
+            
     def run_action_module(self, no_update_fig=False):
         if self.args.random_policy:
             fwd_collision = self.collision_fnc(0, 0, 0, self.scan_2d_slide)
