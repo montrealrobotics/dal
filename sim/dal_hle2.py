@@ -406,8 +406,10 @@ class LocalizationNode:
         self.bel_ent = (self.belief * torch.log(self.belief)).sum().detach()
         # self.bel_ent = np.log(1.0/(self.grid_dirs*self.grid_rows*self.grid_cols))
 
-        self.loss_likelihood = [] # loss for training PM model
-        self.loss_ll=0
+        self.loss_likelihood0 = [] # loss for training PM model
+        self.loss_likelihood1 = []
+        self.loss_ll0=0
+        self.loss_ll1=0
         
         self.loss_policy = 0
         self.loss_value = 0
@@ -2627,29 +2629,43 @@ class LocalizationNode:
         print ("[TIME for LM] %.2f sec"%(self.lm_time))
         del output_softmax, input_batch, output        
         if compute_loss:
-            self.compute_loss(likelihood)
+            self.compute_loss(likelihood, likelihood_high)
         return likelihood, likelihood_high
         # self.likelihood = torch.clamp(self.likelihood, 1e-9, 1.0)
         # self.likelihood = self.likelihood/self.likelihood.sum()
 
-    def compute_loss(self, likelihood):
+    def compute_loss(self, likelihood, likelihood_high):
         gtl = torch.tensor(self.gt_likelihood).float().to(self.device)
+        gtl_high = torch.tensor(self.gt_likelihood_high).float().to(self.device)
+
         if self.args.pm_loss == "KL":
-            self.loss_ll = (gtl * torch.log(gtl/likelihood)).sum()
+            self.loss_ll0 = (gtl * torch.log(gtl/likelihood)).sum()
+            self.loss_ll1 = (gtl_high * torch.log(gtl_high / likelihood_high)).sum()
             
         elif self.args.pm_loss == "L1":
-            self.loss_ll = torch.abs(likelihood - gtl).sum()
+            self.loss_ll0 = torch.abs(likelihood - gtl).sum()
+            self.loss_ll1 = torch.abs(likelihood_high - gtl_high).sum()
 
         if self.args.update_pm_by=="GTL" or self.args.update_pm_by=="BOTH":
-            if len(self.loss_likelihood) < self.args.pm_batch_size:
-                self.loss_likelihood.append(self.loss_ll)
+            if len(self.loss_likelihood0) < self.args.pm_batch_size:
+                self.loss_likelihood0.append(self.loss_ll0)
                 if self.args.verbose > 2:
-                    print ("loss_likelihood", len(self.loss_likelihood))
-            if len(self.loss_likelihood) >= self.args.pm_batch_size:
-                self.back_prop_pm()
-                self.loss_likelihood = []
+                    print ("loss_likelihood0", len(self.loss_likelihood0))
 
-        del gtl
+            if len(self.loss_likelihood1) < self.args.pm_batch_size:
+                self.loss_likelihood1.append(self.loss_ll1)
+                if self.args.verbose > 2:
+                    print ("loss_likelihood1", len(self.loss_likelihood1))
+            
+            if len(self.loss_likelihood0) >= self.args.pm_batch_size:
+                self.back_prop_pm0()
+                self.loss_likelihood0 = []
+
+            if len(self.loss_likelihood1) >= self.args.pm_batch_size:
+                self.back_prop_pm1()
+                self.loss_likelihood1 = []
+
+        del gtl, gtl_high
                 
 
     def mask_likelihood(self):
