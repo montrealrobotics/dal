@@ -2521,7 +2521,7 @@ class LocalizationNode:
 
             
         time_mark = time.time()        
-        if self.perceptual_model == None:
+        if self.perceptual_model0 == None:
             return self.likelihood
         else:
             likelihood = torch.zeros((self.grid_dirs,self.grid_rows, self.grid_cols),
@@ -2529,45 +2529,106 @@ class LocalizationNode:
                                      dtype=torch.float)
 
         if self.args.verbose>1: print("update_likelihood_rotate")
-        if self.args.ch3=="ZERO":
-            input_batch = np.zeros((self.grid_dirs, 3, self.map_rows, self.map_cols))            
-            for i in range(self.grid_dirs): # for all orientations
-                input_batch[i, 0, :,:] = map_img
-                input_batch[i, 1, :,:] = scan_imgs[i,:,:]
-                input_batch[i, 2, :,:] = np.zeros_like(map_img)
-        elif self.args.ch3=="RAND":
-            input_batch = np.zeros((self.grid_dirs, 3, self.map_rows, self.map_cols))            
-            for i in range(self.grid_dirs): # for all orientations
-                input_batch[i, 0, :,:] = map_img
-                input_batch[i, 1, :,:] = scan_imgs[i,:,:]
-                input_batch[i, 2, :,:] = np.random.random(map_img.shape)
-        else:
-            input_batch = np.zeros((self.grid_dirs, 2, self.map_rows, self.map_cols))            
-            for i in range(self.grid_dirs): # for all orientations
-                input_batch[i, 0, :,:] = map_img
-                input_batch[i, 1, :,:] = scan_imgs[i,:,:]
-        input_batch = torch.from_numpy(input_batch).float()
-        output = self.perceptual_model.forward(input_batch)
-        output_softmax  = F.softmax(output.view([1,-1])/self.args.temperature, dim= 1) # shape (1,484)
+        # if self.args.ch3=="ZERO":
+        #     input_batch = np.zeros((self.grid_dirs, 3, self.map_rows, self.map_cols))            
+        #     for i in range(self.grid_dirs): # for all orientations
+        #         input_batch[i, 0, :,:] = map_img
+        #         input_batch[i, 1, :,:] = scan_imgs[i,:,:]
+        #         input_batch[i, 2, :,:] = np.zeros_like(map_img)
+        # elif self.args.ch3=="RAND":
+        #     input_batch = np.zeros((self.grid_dirs, 3, self.map_rows, self.map_cols))            
+        #     for i in range(self.grid_dirs): # for all orientations
+        #         input_batch[i, 0, :,:] = map_img
+        #         input_batch[i, 1, :,:] = scan_imgs[i,:,:]
+        #         input_batch[i, 2, :,:] = np.random.random(map_img.shape)
+        # else:
+        #     input_batch = np.zeros((self.grid_dirs, 2, self.map_rows, self.map_cols))            
+        #     for i in range(self.grid_dirs): # for all orientations
+        #         input_batch[i, 0, :,:] = map_img
+        #         input_batch[i, 1, :,:] = scan_imgs[i,:,:]
 
-        if self.args.n_lm_grids !=  self.args.n_local_grids:
-            # LM output size != localization space size: adjust LM output to fit to localization space.
-            nrows = self.args.n_lm_grids #self.grid_rows/self.args.sub_resolution
-            ncols = self.args.n_lm_grids #self.grid_cols/self.args.sub_resolution
-            like = output_softmax.cpu().detach().numpy().reshape((self.grid_dirs, nrows, ncols))
-            for i in range(self.grid_dirs):
-                likelihood[i,:,:] = torch.tensor(cv2.resize(like[i,:,:], (self.grid_rows,self.grid_cols))).float().to(self.device)
-            likelihood /= likelihood.sum()
-        else:
-            likelihood = output_softmax.reshape(likelihood.shape)
+        input_batch0 = np.zeros((1, 5, self.map_rows, self.map_cols))
+        input_batch0[0,0,:,:] = map_img
+        input_batch0[0,1:5,:,:] = scan_imgs
 
+        input_batch0 = torch.from_numpy(input_batch0).float()
+        
+        # output = self.perceptual_model.forward(input_batch)
+        # output_softmax  = F.softmax(output.view([1,-1])/self.args.temperature, dim= 1) # shape (1,484)
+
+        output0 = self.perceptual_model0(input_batch0)
+        output_softmax  = F.softmax(output0.view([1,-1])/self.args.temperature, dim= 1)
+        output0 = output_softmax.reshape((1, self.grid_dirs, self.grid_rows, self.grid_cols))
+
+        bs, a,b,c = output0.shape # get the output shape
+        u = torch.reshape(output0, (-1, a*b*c))
+        _, idx = torch.topk(output0.view(output0.shape[0], -1), dim=-1, k=self.cells) 
+        x = idx/(b*c)
+        y = (idx%(b*c))/b
+        z = (idx%(b*c))%c
+
+        output1 = torch.zeros((bs, 4, 88, 88))
+        for btc in range(self.cells):
+            scan_cut = torch.zeros((bs, 4, 32, 32))
+            map_cut = torch.zeros((bs, 32, 32))
+            for eth in range(bs):
+                dire, row, col = x[eth,btc], y[eth,btc], z[eth,btc]
+                
+                ## Cut a square patch of size 160x160 around (row, col). If the patch is going beyond map size, then cut it at the boundaries. 
+                if row*8 - 16 >= 0:
+                    row_min = row*8 - 16
+                else:
+                    row_min = 0
+                if row*8 + 16 <= 88:
+                    row_max = row*8 + 16
+                else:
+                    row_max = 88
+
+                if col*8 - 16 >= 0:
+                    col_min = col*8 - 16
+                else:
+                    col_min = 0
+                if col*8 + 16 <= 88:
+                    col_max = col*8 + 16
+                else:
+                    col_max = 88
+
+                scan_cut[eth, :, 0:row_max-row_min, 0:col_max-col_min] = input_batch0[eth, 1:5, row_min:row_max, col_min:col_max]
+                map_cut[eth, 0:row_max-row_min, 0:col_max-col_min] = input_batch0[eth, 0, row_min:row_max, col_min:col_max]
+
+            input_batch1 = torch.zeros((bs, 5, 32, 32))
+            input_batch1[:,0,:,:] = map_cut
+            input_batch1[:,1:5,:,:] = scan_cut
+            output_cut = self.perceptual_model1(input_batch1)
+            # print(size(input_batch1))
+            weight = output0[:,dire,row,col].unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+            print(weight.shape)
+            print(output_cut.shape)
+            output1[:, :, row*8:(row+1)*8, col*8:(col+1)*8] = weight *output_cut
+
+        # if self.args.n_lm_grids !=  self.args.n_local_grids:
+        #     # LM output size != localization space size: adjust LM output to fit to localization space.
+        #     nrows = self.args.n_lm_grids #self.grid_rows/self.args.sub_resolution
+        #     ncols = self.args.n_lm_grids #self.grid_cols/self.args.sub_resolution
+        #     like = output_softmax.cpu().detach().numpy().reshape((self.grid_dirs, nrows, ncols))
+        #     for i in range(self.grid_dirs):
+        #         likelihood[i,:,:] = torch.tensor(cv2.resize(like[i,:,:], (self.grid_rows,self.grid_cols))).float().to(self.device)
+        #     likelihood /= likelihood.sum()
+        # else:
+        #     likelihood = output_softmax.reshape(likelihood.shape)
+
+        likelihood = output0
+        likelihood /= likelihood.sum()
+        likelihood_high = output1
+        likelihood_high = F.softmax(likelihood_high.view([1,-1])/self.args.temperature, dim= 1)
+        likelihood_high = likelihood_high.reshape((1, self.grid_dirs, self.map_rows, self.map_cols))
 
         self.lm_time = time.time()-time_mark
         print ("[TIME for LM] %.2f sec"%(self.lm_time))
         del output_softmax, input_batch, output        
         if compute_loss:
             self.compute_loss(likelihood)
-        return likelihood
+        return likelihood, likelihood_high
         # self.likelihood = torch.clamp(self.likelihood, 1e-9, 1.0)
         # self.likelihood = self.likelihood/self.likelihood.sum()
 
