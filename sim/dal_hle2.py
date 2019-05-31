@@ -176,8 +176,10 @@ class LocalizationNode:
 
         if self.args.rl_model == "none":
             self.args.rl_model = None
-        if self.args.pm_model == "none":
-            self.args.pm_model = None
+        if self.args.pm_model0 == "none":
+            self.args.pm_model0 = None
+        if self.args.pm_model1 == "none":
+            self.args.pm_model1 = None
         
         # load models
         if self.args.pm_model0 is not None:
@@ -292,7 +294,7 @@ class LocalizationNode:
         self.entropy_coef = self.args.c_entropy
 
 
-        if self.args.update_pm_by == "NONE":
+        if self.args.update_pm1_by == "NONE":
             self.optimizer_pm0 = None
             self.optimizer_pm1 = None
         else:
@@ -3833,11 +3835,9 @@ if __name__ == '__main__':
     parser.add_argument("-temp", "--temperature", help="softmax temperature", type=float, default=1.0)
     parser.add_argument("-rt", "--random-temperature", help="softmax temperature", action="store_true")
 
-    parser.add_argument('--pm-net', help ="select PM network",
-                        choices = ['none', 'densenet121', 'densenet169', 'densenet201', 'densenet161',
-                                   'resnet18', 'resnet50', 'resnet101', 'resnet152',
-                                   'resnet18s', 'resnet50s', 'resnet101s', 'resnet152s'],
-                        default='none')
+    parser.add_argument('--pm-net0', help ="select PM network", default='none')
+    parser.add_argument('--pm-net1', help ="select PM network", default='none')
+
     parser.add_argument('--pm-loss', choices=['L1','KL'], default='KL')
     parser.add_argument('--pm-scan-step', type=int, default=1)
     parser.add_argument('--shade', dest="shade", help="shade for scan image", action="store_true")
@@ -3864,7 +3864,8 @@ if __name__ == '__main__':
 
     ## LM-PARAMS
     parser.add_argument('-lp', '--lrpm', help="lr for PM (1e-5)", type=float, default=1e-5)
-    parser.add_argument('-upm', '--update-pm-by', help="train PM with GTL,RL,both, none", choices = ['GTL','RL','BOTH','NONE'], default='NONE', type=str)
+    parser.add_argument('-upm0', '--update-pm0-by', help="train PM with GTL,RL,both, none", choices = ['GTL','RL','BOTH','NONE'], default='GTL', type=str)
+    parser.add_argument('-upm1', '--update-pm1-by', help="train PM with GTL,RL,both, none", choices = ['GTL','RL','BOTH','NONE'], default='GTL', type=str)
 
     ## LOGGING
     parser.add_argument('-ln', "--tflogs-name", help="experiment name to append to the tensor board log files", type=str, default=None)
@@ -3881,7 +3882,8 @@ if __name__ == '__main__':
     parser.add_argument('--mdl-save-freq', type=int, default=1)
 
     ## LOADING MODELS/DATA
-    parser.add_argument('--pm-model', help="perceptual model path and file", type=str, default=None)
+    parser.add_argument('--pm-model0', help="perceptual model path and file", type=str, default=None)
+    parser.add_argument('--pm-model1', help="perceptual model path and file", type=str, default=None)
     parser.add_argument('--use-pretrained', action='store_true')
     parser.add_argument('--rl-model', help="RL model path and file", type=str, default=None)
     parser.add_argument('--ir-model', help="intrinsic reward model path and file", type=str, default=None)
@@ -3901,9 +3903,12 @@ if __name__ == '__main__':
 
     if 360%args.pm_scan_step !=0 or args.pm_scan_step <=0 or args.pm_scan_step > 360:
         raise Exception('pm-scan-step should be in [1, 360]')
-    if args.pm_model is not None:
-        if os.path.islink(args.pm_model):
-            args.pm_model = os.path.realpath(args.pm_model)
+    if args.pm_model0 is not None:
+        if os.path.islink(args.pm_model0):
+            args.pm_model0 = os.path.realpath(args.pm_model0)
+    if args.pm_model1 is not None:
+        if os.path.islink(args.pm_model1):
+            args.pm_model1 = os.path.realpath(args.pm_model1)
     if args.rl_model is not None:
         if os.path.islink(args.rl_model):
             args.rl_model = os.path.realpath(args.rl_model)
