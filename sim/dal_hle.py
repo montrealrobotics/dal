@@ -1803,7 +1803,7 @@ class LocalizationNode:
         gt = self.gt_likelihood_high
         self.gt_likelihood_unnormalized_high = np.copy(self.gt_likelihood_high)
         if self.args.gtl_output == "softmax":
-            gt = softmax(gt, 1.0) # self.args.temperature)
+            gt = softmax(gt, self.args.temperature)
             # gt = torch.from_numpy(softmax(gt)).float().to(self.device)
         elif self.args.gtl_output == "softermax":
             gt = softermax(gt)
