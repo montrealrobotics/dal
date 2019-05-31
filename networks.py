@@ -37,6 +37,203 @@ class Flatten(nn.Module):
 	def forward(self, x):
 		return x.view(x.size(0), -1)
 
+
+class perceptual_conv_l0(nn.Module):
+    def __init__(self, layers):
+        super(perceptual_conv_l0, self).__init__()
+        
+        self.layers = layers
+
+        n_channel_in1 = 5
+        n_channel_out1 = 8
+        n_pool1 = 2
+
+        n_channel_in2 = 8
+        n_channel_out2 = 16
+        n_pool2 = 2
+
+        n_pool3 = 2
+
+        if self.layers == 3:
+            n_channel_in3 = 16
+            n_channel_out3 = 4
+
+        elif self.layers == 4:
+            n_channel_in3 = 16
+            n_channel_out3 = 8
+            n_channel_in4 = 8
+            n_channel_out4 = 4
+
+        elif self.layers == 5:
+            n_channel_in2 = 8
+            n_channel_out2 = 32
+            n_channel_in3 = 32
+            n_channel_out3 = 16
+            n_channel_in4 = 16
+            n_channel_out4 = 8
+            n_channel_in5 = 8
+            n_channel_out5 = 4 
+        
+        else:
+            print("invalid layers")
+
+        kernel_size = 3
+        stride = 1
+        padding = 1
+
+        self.conv1 = nn.Conv2d(n_channel_in1, n_channel_out1, kernel_size, stride, padding) #Should I add bias=False?
+        self.relu1 = nn.ReLU()
+        self.pool1 = nn.MaxPool2d(kernel_size = n_pool1)
+
+        self.conv2 = nn.Conv2d(n_channel_in2, n_channel_out2, kernel_size, stride, padding)
+        self.relu2 = nn.ReLU()
+        self.pool2 = nn.MaxPool2d(kernel_size = n_pool2)
+
+        self.conv3 = nn.Conv2d(n_channel_in3, n_channel_out3, kernel_size, stride, padding)
+        self.relu3 = nn.ReLU()
+        self.pool3 = nn.MaxPool2d(kernel_size = n_pool3)
+
+        if self.layers >= 4:
+            self.conv4 = nn.Conv2d(n_channel_in4, n_channel_out4, kernel_size, stride, padding)
+            self.relu4 = nn.ReLU()
+
+        if self.layers == 5:
+            self.conv5 = nn.Conv2d(n_channel_in5, n_channel_out5, kernel_size, stride, padding)
+            self.relu5 = nn.ReLU()
+        
+        # self.act1 = nn.Tanh()
+        # self.act2 = nn.Softmax(dim=2)
+
+    def forward(self, x):
+
+        x = Variable(x.float())
+        x = self.conv1(x)
+        x = self.relu1(x)
+        x = self.pool1(x)
+
+        x = self.conv2(x)
+        x = self.relu2(x)
+        x = self.pool2(x)
+
+        if self.layers == 3:
+            x = self.conv3(x)
+            x = self.relu3(x)
+            x = self.pool3(x)
+        
+        elif self.layers == 4:
+            x = self.conv3(x)
+            x = self.relu3(x)
+            x = self.pool3(x)
+            x = self.conv4(x)
+            x = self.relu4(x)
+        
+        elif self.layers == 5:
+            x = self.conv3(x)
+            x = self.relu3(x)
+            x = self.pool3(x)
+            x = self.conv4(x)
+            x = self.relu4(x)
+            x = self.conv5(x)
+            x = self.relu5(x)
+        
+        else:
+            print("invalid layers")
+
+
+        return x
+
+
+class perceptual_conv_real_l1(nn.Module):
+    def __init__(self, layers):
+        super(perceptual_conv_real_l1, self).__init__()
+
+        self.layers = layers
+
+        n_channel_in1 = 5
+        n_channel_out1 = 8
+        n_pool1 = 2
+
+        n_channel_in2 = 8
+        n_channel_out2 = 16
+        n_pool2 = 2
+        n_pool3 = 2
+
+        if self.layers == 3:
+            n_channel_in3 = 16
+            n_channel_out3 = 1
+            
+
+        if self.layers == 4:
+            n_channel_in3 = 16
+            n_channel_out3 = 8
+
+            n_channel_in4 = 8
+            n_channel_out4 = 1
+            
+        if self.layers == 5:
+            n_channel_in3 = 16
+            n_channel_out3 = 32
+
+            n_channel_in4 = 32
+            n_channel_out4 = 8
+
+            n_channel_in5 = 8
+            n_channel_out5 = 1
+
+        
+        kernel_size = 3
+        stride = 1
+        padding = 1
+
+        self.conv1 = nn.Conv2d(n_channel_in1, n_channel_out1, kernel_size, stride, padding)
+        self.relu1 = nn.ReLU()
+        self.pool1 = nn.MaxPool2d(kernel_size = n_pool1)
+
+        self.conv2 = nn.Conv2d(n_channel_in2, n_channel_out2, kernel_size, stride, padding)
+        self.relu2 = nn.ReLU()
+        self.pool2 = nn.MaxPool2d(kernel_size = n_pool2)
+
+        self.conv3 = nn.Conv2d(n_channel_in3, n_channel_out3, kernel_size, stride, padding)
+        self.relu3 = nn.ReLU()
+        self.pool3 = nn.MaxPool2d(kernel_size = n_pool3)
+
+        if self.layers == 4:
+            self.conv4 = nn.Conv2d(n_channel_in4, n_channel_out4, kernel_size, stride, padding)
+            self.relu4 = nn.ReLU()
+
+        if self.layers == 5:
+            self.conv3 = nn.Conv2d(n_channel_in3, n_channel_out3, kernel_size, stride, padding)
+            self.relu3 = nn.ReLU()
+            self.conv4 = nn.Conv2d(n_channel_in4, n_channel_out4, kernel_size, stride, padding)
+            self.relu4 = nn.ReLU()
+            self.conv5 = nn.Conv2d(n_channel_in5, n_channel_out5, kernel_size, stride, padding)
+            self.relu5 = nn.ReLU()
+
+    def forward(self, x):
+
+        x = Variable(x.float())
+        x = self.conv1(x)
+        x = self.relu1(x)
+        x = self.pool1(x)
+
+        x = self.conv2(x)
+        x = self.relu2(x)
+        x = self.pool2(x)
+
+        x = self.conv3(x)
+        x = self.relu3(x)
+        # x = self.pool3(x)
+
+        if self.layers >= 4:
+            x = self.conv4(x)
+            x = self.relu4(x)
+
+        if self.layers == 5:
+            x = self.conv5(x)
+            x = self.relu5(x)
+ 
+        return x
+
 class perceptual_laserscan_fc(nn.Module):
 	def __init__(self,
 			d_in = Config.map_width * Config.map_height + Config.laser_scan_dim,
