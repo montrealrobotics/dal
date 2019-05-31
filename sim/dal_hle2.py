@@ -293,11 +293,14 @@ class LocalizationNode:
 
 
         if self.args.update_pm_by == "NONE":
-            self.optimizer_pm = None
+            self.optimizer_pm0 = None
+            self.optimizer_pm1 = None
         else:
-            self.optimizer_pm = torch.optim.Adam(list(self.perceptual_model.parameters()), lr=self.args.lrpm)
+            self.optimizer_pm0 = torch.optim.Adam(list(self.perceptual_model0.parameters()), lr=self.args.lrpm0)
+            self.optimizer_pm1 = torch.optim.Adam(list(self.perceptual_model1.parameters()), lr=self.args.lrpm1)
             if self.args.schedule_pm:
-                self.scheduler_pm = StepLR(self.optimizer_pm, step_size=self.args.pm_step_size, gamma=self.args.pm_decay)
+                self.scheduler_pm0 = StepLR(self.optimizer_pm0, step_size=self.args.pm_step_size, gamma=self.args.pm_decay)
+                self.scheduler_pm1 = StepLR(self.optimizer_pm1, step_size=self.args.pm_step_size, gamma=self.args.pm_decay)
                 # self.scheduler_lp = ReduceLROnPlateau(self.optimizer_pm,
                 #                                    factor = 0.5,
                 #                                    patience = 2,
@@ -497,7 +500,8 @@ class LocalizationNode:
             
             self.log_filepath = os.path.join(self.log_dir, 'log.txt')
             self.rollout_list = os.path.join(self.log_dir, 'rollout_list.txt')            
-            self.pm_filepath = os.path.join(self.log_dir, 'perceptual.model')
+            self.pm_filepath0 = os.path.join(self.log_dir, 'perceptual.model0')
+            self.pm_filepath1 = os.path.join(self.log_dir, 'perceptual.model1')
             self.rl_filepath = os.path.join(self.log_dir, 'rl.model')
             self.ir_filepath = os.path.join(self.log_dir, 'ir.model')
             self.data_path = os.path.join(self.log_dir, 'data')
@@ -1269,10 +1273,10 @@ class LocalizationNode:
             lr_rl = 0
         else:
             lr_rl = self.optimizer.param_groups[0]['lr']
-        if self.optimizer_pm == None:
+        if self.optimizer_pm0 == None:
             lr_pm = 0
         else:
-            lr_pm = self.optimizer_pm.param_groups[0]['lr']
+            lr_pm = self.optimizer_pm0.param_groups[0]['lr']
 
         if self.args.save:
             with open(self.log_filepath,'a') as flog:
@@ -3409,24 +3413,44 @@ class LocalizationNode:
             print ('RL model saved at %s.'%self.rl_filepath)
 
 
-    def back_prop_pm(self):
+    def back_prop_pm0(self):
         if self.args.update_pm_by=="GTL" or self.args.update_pm_by=="BOTH":
-            self.optimizer_pm.zero_grad()
-            (sum(self.loss_likelihood)/float(len(self.loss_likelihood))).backward(retain_graph = True)
-            self.optimizer_pm.step()
+            self.optimizer_pm0.zero_grad()
+            (sum(self.loss_likelihood0)/float(len(self.loss_likelihood0))).backward(retain_graph = True)
+            self.optimizer_pm0.step()
 
-            mean_test_loss = sum(self.loss_likelihood).item()
+            mean_test_loss = sum(self.loss_likelihood0).item()
             if self.args.schedule_pm:
                 # self.scheduler_pm.step(mean_test_loss)
-                self.scheduler_pm.step()
+                self.scheduler_pm0.step()
             self.pm_backprop_cnt += 1
             if self.args.save and self.pm_backprop_cnt % self.args.mdl_save_freq == 0:
-                torch.save(self.perceptual_model.state_dict(), self.pm_filepath)
-                print ('perceptual model saved at %s.'%self.pm_filepath)
+                torch.save(self.perceptual_model0.state_dict(), self.pm_filepath0)
+                print ('perceptual model 0 saved at %s.'%self.pm_filepath0)
         else:
             return
         if self.args.verbose>0:
-            print ("back_prop_pm done")
+            print ("back_prop_pm 0  done")
+
+
+    def back_prop_pm1(self):
+        if self.args.update_pm_by=="GTL" or self.args.update_pm_by=="BOTH":
+            self.optimizer_pm1.zero_grad()
+            (sum(self.loss_likelihood1)/float(len(self.loss_likelihood1))).backward(retain_graph = True)
+            self.optimizer_pm1.step()
+
+            mean_test_loss = sum(self.loss_likelihood1).item()
+            if self.args.schedule_pm:
+                # self.scheduler_pm.step(mean_test_loss)
+                self.scheduler_pm1.step()
+            self.pm_backprop_cnt += 1
+            if self.args.save and self.pm_backprop_cnt % self.args.mdl_save_freq == 0:
+                torch.save(self.perceptual_model1.state_dict(), self.pm_filepath1)
+                print ('perceptual model 1 saved at %s.'%self.pm_filepath1)
+        else:
+            return
+        if self.args.verbose>0:
+            print ("back_prop_pm 1 done")
 
 
     def next_step(self):
@@ -3528,8 +3552,9 @@ class LocalizationNode:
             # save parameters
 
             if self.args.update_pm_by != "NONE":
-                torch.save(self.perceptual_model.state_dict(), self.pm_filepath)
-                print ('perceptual model saved at %s.'%self.pm_filepath)
+                torch.save(self.perceptual_model0.state_dict(), self.pm_filepath0)
+                torch.save(self.perceptual_model1.state_dict(), self.pm_filepath1)
+                print ('perceptual modelss saved at %s.'%self.pm_filepath0)
             if self.args.update_rl:
                 torch.save(self.policy_model.state_dict(), self.rl_filepath)
                 print ('RL model saved at %s.'%self.rl_filepath)
