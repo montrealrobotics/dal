@@ -33,6 +33,7 @@ from torchvision.models.densenet import densenet121, densenet169, densenet201, d
 from copy import deepcopy
 
 from networks import policy_A3C
+from networks import perceptual_conv_l0, perceptual_conv_real_l1
 
 from resnet_pm import resnet18, resnet34, resnet50, resnet101, resnet152
 from torchvision.models.resnet import resnet18 as resnet18s
@@ -158,93 +159,10 @@ class LocalizationNode:
         else:
             num_classes = final_num_classes
 
-        if self.args.pm_net == "none":
-            self.map_rows = 224
-            self.map_cols = 224
-            self.perceptual_model = None
-        elif self.args.pm_net == "densenet121":
-            self.map_rows = 224
-            self.map_cols = 224
-            self.perceptual_model = densenet121(pretrained = self.args.use_pretrained, drop_rate = self.args.drop_rate)
-            num_ftrs = self.perceptual_model.classifier.in_features # 1024
-            self.perceptual_model.classifier = nn.Linear(num_ftrs, num_classes)
-        elif self.args.pm_net == "densenet169":
-            self.map_rows = 224
-            self.map_cols = 224
-            self.perceptual_model = densenet169(pretrained = self.args.use_pretrained, drop_rate = self.args.drop_rate)
-            num_ftrs = self.perceptual_model.classifier.in_features # 1664
-            self.perceptual_model.classifier = nn.Linear(num_ftrs, num_classes)
-        elif self.args.pm_net == "densenet201":
-            self.map_rows = 224
-            self.map_cols = 224
-            self.perceptual_model = densenet201(pretrained = self.args.use_pretrained, drop_rate = self.args.drop_rate)
-            num_ftrs = self.perceptual_model.classifier.in_features # 1920
-            self.perceptual_model.classifier = nn.Linear(num_ftrs, num_classes)
-        elif self.args.pm_net == "densenet161":
-            self.map_rows = 224
-            self.map_cols = 224
-            self.perceptual_model = densenet161(pretrained = self.args.use_pretrained, drop_rate = self.args.drop_rate)
-            num_ftrs = self.perceptual_model.classifier.in_features # 2208
-            self.perceptual_model.classifier = nn.Linear(num_ftrs, num_classes)
-        elif self.args.pm_net == "resnet18s":
-            self.map_rows = 224
-            self.map_cols = 224
-            self.perceptual_model = resnet18s(pretrained=self.args.use_pretrained)
-            num_ftrs = self.perceptual_model.fc.in_features
-            self.perceptual_model.fc = nn.Linear(num_ftrs, num_classes)
-        elif self.args.pm_net == "resnet34s":
-            self.map_rows = 224
-            self.map_cols = 224
-            self.perceptual_model = resnet34s(pretrained=self.args.use_pretrained)
-            num_ftrs = self.perceptual_model.fc.in_features
-            self.perceptual_model.fc = nn.Linear(num_ftrs, num_classes)
-        elif self.args.pm_net == "resnet50s":
-            self.map_rows = 224
-            self.map_cols = 224
-            self.perceptual_model = resnet50s(pretrained=self.args.use_pretrained)
-            num_ftrs = self.perceptual_model.fc.in_features
-            self.perceptual_model.fc = nn.Linear(num_ftrs, num_classes)
-        elif self.args.pm_net == "resnet101s":
-            self.map_rows = 224
-            self.map_cols = 224
-            self.perceptual_model = resnet101s(pretrained=self.args.use_pretrained)
-            num_ftrs = self.perceptual_model.fc.in_features
-            self.perceptual_model.fc = nn.Linear(num_ftrs, num_classes)
-        elif self.args.pm_net == "resnet152s":
-            self.map_rows = 224
-            self.map_cols = 224
-            self.perceptual_model = resnet152s(pretrained=self.args.use_pretrained)
-            num_ftrs = self.perceptual_model.fc.in_features
-            self.perceptual_model.fc = nn.Linear(num_ftrs, num_classes)
-        elif self.args.pm_net == "resnet18":
-            self.map_rows = 224
-            self.map_cols = 224
-            self.perceptual_model = resnet18(num_classes = num_classes)
-            num_ftrs = self.perceptual_model.fc.in_features
-        elif self.args.pm_net == "resnet34":
-            self.map_rows = 224
-            self.map_cols = 224
-            self.perceptual_model = resnet34(num_classes = num_classes)
-            num_ftrs = self.perceptual_model.fc.in_features
-        elif self.args.pm_net == "resnet50":
-            self.map_rows = 224
-            self.map_cols = 224
-            self.perceptual_model = resnet50(num_classes = num_classes)
-            num_ftrs = self.perceptual_model.fc.in_features
-        elif self.args.pm_net == "resnet101":
-            self.map_rows = 224
-            self.map_cols = 224
-            self.perceptual_model = resnet101(num_classes = num_classes)
-            num_ftrs = self.perceptual_model.fc.in_features
-        elif self.args.pm_net == "resnet152":
-            self.map_rows = 224
-            self.map_cols = 224
-            self.perceptual_model = resnet152(num_classes = num_classes)
-            num_ftrs = self.perceptual_model.fc.in_features # 2048
-        else:
-            raise Exception('pm-net required: resnet or densenet')
+        self.perceptual_model0 = perceptual_conv_l0(4)
+        self.perceptual_model1 = perceptual_conv_real_l1(4)
 
-
+        
         if self.args.RL_type == 0:
             self.policy_model = policy_A3C(self.args.n_state_grids, 2+self.args.n_state_dirs, num_actions = self.args.num_actions)
         elif self.args.RL_type == 1:
@@ -262,8 +180,8 @@ class LocalizationNode:
             self.args.pm_model = None
         
         # load models
-        if self.args.pm_model is not None:
-            state_dict = torch.load(self.args.pm_model)
+        if self.args.pm_model0 is not None:
+            state_dict = torch.load(self.args.pm_model0)
             new_state_dict = OrderedDict()
 
             for k,v in state_dict.items():
@@ -272,8 +190,21 @@ class LocalizationNode:
                 else:
                     name = k
                 new_state_dict[name] = v
-            self.perceptual_model.load_state_dict(new_state_dict)
-            print ('perceptual model %s is loaded.'%self.args.pm_model)
+            self.perceptual_model0.load_state_dict(new_state_dict)
+            print ('perceptual model %s is loaded.'%self.args.pm_model0)
+
+        if self.args.pm_model1 is not None:
+            state_dict = torch.load(self.args.pm_model1)
+            new_state_dict = OrderedDict()
+
+            for k,v in state_dict.items():
+                if 'module.' in k:
+                    name = k[7:]
+                else:
+                    name = k
+                new_state_dict[name] = v
+            self.perceptual_model1.load_state_dict(new_state_dict)
+            print ('perceptual model %s is loaded.'%self.args.pm_model1)
 
 
         if self.args.rl_model is not None:
@@ -293,40 +224,51 @@ class LocalizationNode:
             print ('intri model %s is loaded.'%self.args.ir_model)
 
         # change n-classes
-        if self.args.n_pre_classes is not None:
-            # resize the output layer:
-            new_num_classes = final_num_classes
-            if "resnet" in self.args.pm_net:
-                self.perceptual_model.fc = nn.Linear(self.perceptual_model.fc.in_features, new_num_classes, bias=True)
-            elif "densenet" in args.pm_net:
-                num_ftrs = self.perceptual_model.classifier.in_features
-                self.perceptual_model.classifier = nn.Linear(num_ftrs, new_num_classes)
-            print ('model: num_classes now changed to', new_num_classes)
+        # if self.args.n_pre_classes is not None:
+        #     # resize the output layer:
+        #     new_num_classes = final_num_classes
+        #     if "resnet" in self.args.pm_net:
+        #         self.perceptual_model.fc = nn.Linear(self.perceptual_model.fc.in_features, new_num_classes, bias=True)
+        #     elif "densenet" in args.pm_net:
+        #         num_ftrs = self.perceptual_model.classifier.in_features
+        #         self.perceptual_model.classifier = nn.Linear(num_ftrs, new_num_classes)
+        #     print ('model: num_classes now changed to', new_num_classes)
 
 
         # data parallel, multi GPU
         # https://pytorch.org/tutorials/beginner/blitz/data_parallel_tutorial.html
         if self.device==torch.device("cuda") and torch.cuda.device_count()>0:
             print ("Use", torch.cuda.device_count(), 'GPUs')
-            if self.perceptual_model != None:
-                self.perceptual_model = nn.DataParallel(self.perceptual_model)
+            if self.perceptual_model0 != None:
+                self.perceptual_model0 = nn.DataParallel(self.perceptual_model0)
+            if self.perceptual_model1 != None:
+                self.perceptual_model1 = nn.DataParallel(self.perceptual_model1)
             self.policy_model = nn.DataParallel(self.policy_model)
             self.intri_model = nn.DataParallel(self.intri_model)
         else:
             print ("Use CPU")
 
-        if self.perceptual_model != None:
-            self.perceptual_model.to(self.device)
+        if self.perceptual_model0 != None:
+            self.perceptual_model0.to(self.device)
+        if self.perceptual_model1 != None:
+            self.perceptual_model1.to(self.device)
         self.policy_model.to(self.device)
         self.intri_model.to(self.device)
         # 
 
-        if self.perceptual_model != None:
-            if self.args.update_pm_by == "NONE":
-                self.perceptual_model.eval()
+        if self.perceptual_model0 != None:
+            if self.args.update_pm0_by == "NONE":
+                self.perceptual_model0.eval()
                 # self.perceptual_model.train()
             else:
-                self.perceptual_model.train()
+                self.perceptual_model0.train()
+
+        if self.perceptual_model1 != None:
+            if self.args.update_pm1_by == "NONE":
+                self.perceptual_model1.eval()
+                # self.perceptual_model.train()
+            else:
+                self.perceptual_model1.train()
 
         if self.args.update_rl:
             self.policy_model.train()
@@ -363,7 +305,7 @@ class LocalizationNode:
         models = []
         
         if self.args.update_pm_by=="RL" or self.args.update_pm_by=="BOTH":
-            models = models + list(self.perceptual_model.parameters())
+            models = models + list(self.perceptual_model0.parameters()) +list(perceptual_model1.parameters())
         if self.args.update_rl:
             models = models + list(self.policy_model.parameters())
         if self.args.update_ir:
@@ -404,18 +346,6 @@ class LocalizationNode:
         self.ylim = np.array(self.ylim)
 
         self.map_width_meter = map_side_len
-
-        # decide maze grids for each env
-        # if self.args.maze_grids_range[0] == None:
-        #     pass
-        # else:
-        #     self.n_maze_grids = np.random.randint(self.args.maze_grids_range[0],self.args.maze_grids_range[1])
-
-        # self.hall_width = self.map_width_meter/self.n_maze_grids
-        # if self.args.thickness == None:
-        #     self.obs_radius = 0.25*self.hall_width
-        # else:
-        #     self.obs_radius = 0.5*self.args.thickness * self.hall_width
 
         self.collision_radius = self.args.collision_radius #0.25 # robot radius for collision
 
@@ -458,6 +388,10 @@ class LocalizationNode:
                                      device=torch.device(self.device), 
                                      dtype=torch.float)
         self.likelihood = self.likelihood / self.likelihood.sum()
+        self.likelihood_high = torch.ones((self.grid_dirs, self.map_rows, self.map_cols),
+                                    device = torch.device(self.device),
+                                    dtype=torch.float)
+        self.likelihood_high = self.likelihood_high / self.likelihood_high.sum()
 
         self.gt_likelihood = np.ones((self.grid_dirs,self.grid_rows,self.grid_cols))
         self.gt_likelihood_unnormalized = np.ones((self.grid_dirs,self.grid_rows,self.grid_cols))
@@ -466,6 +400,8 @@ class LocalizationNode:
         
         self.belief = torch.ones((self.grid_dirs,self.grid_rows, self.grid_cols),device=torch.device(self.device))
         self.belief = self.belief / self.belief.sum()
+        self.belief_high = torch.ones((self.grid_dirs, self.map_rows, self.map_cols), device=torch.device(self.device))
+        self.belief_high = self.belief_high / self.belief_high.sum()
 
         self.bel_ent = (self.belief * torch.log(self.belief)).sum().detach()
         # self.bel_ent = np.log(1.0/(self.grid_dirs*self.grid_rows*self.grid_cols))
