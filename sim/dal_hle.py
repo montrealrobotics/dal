@@ -435,6 +435,7 @@ class LocalizationNode:
 
 
         self.scans_over_map = np.zeros((self.grid_rows,self.grid_cols,360))
+        self.scans_over_map_high = np.zeros((self.map_rows, self.map_cols, 360))
 
 
 
@@ -459,7 +460,9 @@ class LocalizationNode:
         self.likelihood = self.likelihood / self.likelihood.sum()
 
         self.gt_likelihood = np.ones((self.grid_dirs,self.grid_rows,self.grid_cols))
-        self.gt_likelihood_unnormalized = np.ones((self.grid_dirs,self.grid_rows,self.grid_cols))        
+        self.gt_likelihood_unnormalized = np.ones((self.grid_dirs,self.grid_rows,self.grid_cols))
+        self.gt_likelihood_high = np.ones((self.grid_dirs, self.map_rows, self.map_cols))
+        self.gt_likelihood_high_unnormalized = np.ones((self.grid_dirs, self.map_rows, self.map_cols))        
         
         self.belief = torch.ones((self.grid_dirs,self.grid_rows, self.grid_cols),device=torch.device(self.device))
         self.belief = self.belief / self.belief.sum()
@@ -593,6 +596,7 @@ class LocalizationNode:
 
             if self.args.gtl_off == False:
                 self.get_synth_scan_mp(self.scans_over_map, map_img=self.map_for_LM, xlim=self.xlim, ylim=self.ylim) # generate synthetic scan data over the map (and directions)
+                self.get_synth_scan_high_mp(self.scans_over_map_high, map_img=self.map_for_LM, xlim=self.xlim, ylim=self.ylim)
 
             self.reset_explored()
             if self.args.init_pose is not None:
@@ -608,6 +612,27 @@ class LocalizationNode:
 
             if self.args.figure==True:
                 self.update_figure(newmap=True)
+
+        # self.map_for_LM = np.load('/home/sai/hierar/qroom_real_map_88.npy')
+        # self.make_low_dim_maps()
+        # self.get_synth_scan_mp(self.scans_over_map, map_img=self.map_for_LM, xlim=self.xlim, ylim=self.ylim)
+
+        
+        # self.reset_explored()
+        # if self.args.init_pose is not None:
+        #     placed = self.set_init_pose()
+        # else:
+        #     placed = self.place_turtle()
+                
+        # if placed:
+        #     self.current_state = "update_likelihood"
+        # else:
+        #     print ("place turtle failed. trying a new map")
+        #     return
+
+        # if self.args.figure==True:
+        #     self.update_figure(newmap=True)
+
 
         elif self.current_state == "new_pose":
             self.reset_explored()
@@ -638,6 +663,7 @@ class LocalizationNode:
 
             time_mark = time.time()            
             self.compute_gtl(self.scans_over_map)
+            self.compute_gtl_high(self.scans_over_map_high)
             self.gtl_time = time.time()-time_mark
             print ("[TIME for GTL] %.2f sec"%(time.time()-time_mark))
 
@@ -1181,9 +1207,12 @@ class LocalizationNode:
     def update_gtl_dist(self,ax):
         # y = (self.gt_likelihood.cpu().detach().numpy().flatten())
         y = self.gt_likelihood.flatten()
+        y_high = self.gt_likelihood_high.flatten()
         if self.obj_gtl_dist == None:
             x = range(y.size)
+            x_high = range(y_high.size)
             self.obj_gtl_dist, = ax.plot(x,y,'.')
+            self.obj_gtl_dist_high, = 
             self.obj_gtl_max, = ax.plot(np.argmax(y), np.max(y), 'rx')
             ax.set_ylim([0, y.max()*2])
             # ax.set_ylabel('GTL')
@@ -1826,6 +1855,33 @@ class LocalizationNode:
         #     self.gt_likelihood[i,:,:] = ret['gtl']
         #     # self.gt_likelihood[i,:,:] = torch.tensor(ret['gtl']).float().to(self.device)
 
+    def get_gt_likelihood_cossim_high(self, ref_scans, scan_data):
+        # start_time = time.time()
+        manager = multiprocessing.Manager()
+        return_dict = manager.dict()
+
+        accum = 0
+        procs = []
+        for i_worker in range(min(self.args.n_workers, self.grid_dirs)):
+            n_dirs = self.grid_dirs//self.args.n_workers
+            if i_worker < self.grid_dirs % self.args.n_workers:
+                n_dirs +=1
+            my_dirs = range(accum, accum+n_dirs)
+            accum += n_dirs
+            if len(my_dirs)>0:
+                pro = multiprocessing.Process(target = self.get_gtl_cos_mp,
+                                          args = [ref_scans, scan_data, my_dirs, return_dict_high])
+                procs.append(pro)
+
+        [pro.start() for pro in procs]
+        [pro.join() for pro in procs]
+
+        gtl = np.ones((self.grid_dirs,self.map_rows,self.map_cols))
+        for i in range(self.grid_dirs):
+            ret = return_dict_high[i]    
+            gtl[i,:,:] = ret['gtl_high']
+        return gtl
+
             
     def get_gt_likelihood_cossim2(self, scan_data):
         # start_time = time.time()
@@ -1879,6 +1935,31 @@ class LocalizationNode:
             ret = return_dict[i]    
             self.gt_likelihood[i,:,:] = ret['gtl']
             # self.gt_likelihood[i,:,:] = torch.tensor(ret['gtl']).float().to(self.device)
+
+    def get_gt_likelihood_corr_high(self, ref_scans, clip=0):
+        # start_time = time.time()
+        manager = multiprocessing.Manager()
+        return_dict = manager.dict()
+
+        accum = 0
+        procs = []
+        for i_worker in range(min(self.args.n_workers, self.grid_dirs)):
+            n_dirs = self.grid_dirs//self.args.n_workers
+            if i_worker < self.grid_dirs % self.args.n_workers:
+                n_dirs +=1
+            my_dirs = range(accum, accum+n_dirs)
+            accum += n_dirs
+            if len(my_dirs)>0:
+                pro = multiprocessing.Process(target = self.get_gtl_corr_mp,
+                                              args = [ref_scans, my_dirs, return_dict_high, clip])
+                procs.append(pro)
+
+        [pro.start() for pro in procs]
+        [pro.join() for pro in procs]
+
+        for i in range(self.grid_dirs):
+            ret = return_dict_high[i]    
+            self.gt_likelihood_high[i,:,:] = ret['gtl_high']
         
 
     def get_cosine_sim(self,x,y):
@@ -2046,7 +2127,48 @@ class LocalizationNode:
             col_ld = i_place %  self.grid_cols
             # scans[row_ld, col_ld,:] = np.clip(scan, self.min_scan_range, np.inf)            
             scans[row_ld, col_ld,:] = np.clip(scan, self.min_scan_range, self.max_scan_range)
-            # self.scans_over_map[row_ld, col_ld,:] = np.clip(scan, self.min_scan_range, self.max_scan_range)
+            self.scans_over_map[row_ld, col_ld,:] = np.clip(scan, self.min_scan_range, self.max_scan_range)
+
+
+
+    def get_synth_scan_high_mp(self, scans_high, map_img=None, xlim=None, ylim=None):
+
+        # print (multiprocessing.cpu_count())
+        # start_time = time.time()    
+        # place sensor at a location, then reach out in 360 rays all around it and record when each ray gets hit.
+        n_places=self.map_rows * self.map_cols
+        
+        manager = multiprocessing.Manager()
+        return_dict = manager.dict()
+        procs = []
+        
+        accum = 0
+        for worker in range(min(self.args.n_workers, n_places)):
+            n_myplaces = n_places//self.args.n_workers
+            if worker < n_places % self.args.n_workers:
+                n_myplaces += 1
+            range_place = range(accum, accum+n_myplaces)
+            accum += n_myplaces
+
+            kwargs = {'scan_step': self.args.pm_scan_step, 'map_img':map_img, 'xlim':xlim, 'ylim':ylim, 'fov':False}
+            pro = multiprocessing.Process(target = self.get_a_scan_mp, args = [range_place, return_dict ], kwargs = kwargs)
+            procs.append(pro)
+
+        [pro.start() for pro in procs]
+        [pro.join() for pro in procs]
+        
+        # scans = np.ndarray((self.grid_rows*self.grid_cols, 360))
+
+        for i_place in range(n_places):
+            ### multi-processing
+            rd = return_dict[i_place]
+            scan = rd['scan']
+            # scans [i_place, :] = np.clip(scan, self.min_scan_range, self.max_scan_range)
+            row_ld = i_place // self.grid_cols
+            col_ld = i_place %  self.grid_cols
+            # scans[row_ld, col_ld,:] = np.clip(scan, self.min_scan_range, np.inf)            
+            scans_high[row_ld, col_ld,:] = np.clip(scan, self.min_scan_range, self.max_scan_range)
+            self.scans_over_map_high[row_ld, col_ld,:] = np.clip(scan, self.min_scan_range, self.max_scan_range)
 
         
     def slide_scan(self):
