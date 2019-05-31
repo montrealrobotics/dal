@@ -462,6 +462,10 @@ class LocalizationNode:
 
         self.obj_collision = None
 
+
+        self.the_mask_high = torch.tensor(np.ones([self.grid_dirs, self.map_rows, self.map_cols])).float().to(self.device)
+        self.the_mask = torch.tensor(np.ones([self.grid_dirs, self.grid_rows, self.grid_cols])).float().to(self.device)
+
         if self.args.save:
             home=os.environ['HOME']
             str_date_time = datetime.now().strftime('%Y%m%d-%H%M%S')
@@ -551,27 +555,7 @@ class LocalizationNode:
             if self.args.figure==True:
                 self.update_figure(newmap=True)
 
-        # self.map_for_LM = np.load('/home/sai/hierar/qroom_real_map_88.npy')
-        # self.make_low_dim_maps()
-        # self.get_synth_scan_mp(self.scans_over_map, map_img=self.map_for_LM, xlim=self.xlim, ylim=self.ylim)
-
         
-        # self.reset_explored()
-        # if self.args.init_pose is not None:
-        #     placed = self.set_init_pose()
-        # else:
-        #     placed = self.place_turtle()
-                
-        # if placed:
-        #     self.current_state = "update_likelihood"
-        # else:
-        #     print ("place turtle failed. trying a new map")
-        #     return
-
-        # if self.args.figure==True:
-        #     self.update_figure(newmap=True)
-
-
         elif self.current_state == "new_pose":
             self.reset_explored()
 
@@ -1485,6 +1469,16 @@ class LocalizationNode:
         self.map_for_pose = cv2.resize(self.map_for_LM, (self.grid_rows, self.grid_cols),interpolation=cv2.INTER_AREA)
         self.map_for_pose = normalize(self.map_for_pose)
         self.map_for_pose = np.clip(self.map_for_pose, 0.0, 1.0)
+
+        for i in range(self.grid_rows):
+            for j in range(self.grid_cols):
+                if self.map_for_pose[i, j]>0.5:
+                    self.the_mask[:,i,j]=0.0
+
+        for i in range(self.map_rows):
+            for j in range(self.map_cols):
+                if self.map_for_LM[i, j]>0.5:
+                    self.the_mask_high[:,i,j]=0.0
 
         mdt = cv2.resize(self.map_for_LM,(self.args.n_state_grids,self.args.n_state_grids), interpolation=cv2.INTER_AREA)
         mdt = normalize(mdt)
@@ -2598,14 +2592,13 @@ class LocalizationNode:
                 
 
     def mask_likelihood(self):
-        the_mask = torch.tensor(np.ones([self.grid_dirs, self.grid_rows, self.grid_cols])).float().to(self.device)
-        for i in range(self.grid_rows):
-            for j in range(self.grid_cols):
-                if self.map_for_pose[i, j]>0.5:
-                    the_mask[:,i,j]=0.0
-        self.likelihood = self.likelihood * the_mask
+        self.likelihood = self.likelihood * self.the_mask
         #self.likelihood = torch.clamp(self.likelihood, 1e-9, 1.0)
         self.likelihood = self.likelihood/self.likelihood.sum()
+
+        self.likelihood_high = self.likelihood_high * self.the_mask_high
+        #self.likelihood = torch.clamp(self.likelihood, 1e-9, 1.0)
+        self.likelihood_high = self.likelihood_high/self.likelihood_high.sum()
 
         
     def product_belief(self):
@@ -3638,7 +3631,7 @@ if __name__ == '__main__':
     parser.add_argument("--flip-map", help = "flip n pixels 0 <--> 1 in map image", type=int, default=0)
     parser.add_argument("--load-map-LM", help = "load an actual map for LM target", type=str, default=None)
     parser.add_argument("--load-map-RL", help = "load an actual map for RL state", type=str, default=None)
-    parser.add_argument("--map-pixel", help = "size of a map pixel in real world (meters)", type=float, default=6.0/224.0)
+    parser.add_argument("--map-pixel", help = "size of a map pixel in real world (meters)", type=float, default=6.0/88.0)
     #parser.add_argument("--maze-grids-range", type=int, nargs=2, default=[None, None])
     parser.add_argument("--n-maze-grids", type=int, nargs='+', default=[11])
     parser.add_argument("--n-local-grids", type=int, default=11)
