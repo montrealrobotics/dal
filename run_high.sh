@@ -35,25 +35,30 @@ UPDATE=''
 
 ## this loads the SAIT maps:
 ## the file was saved with np.save() with 0=open space, 1=occupied.
-MAP=maps/mlab-02-map-224x224.npy
+MAP='/home/sai/hierar/qroom_real_map_88.npy'
 
 ## to train from the scratch:
-# RLMODEL=none
-# PMMODEL=none
+RLMODEL=none
+PMMODEL0=none
+PMMODEL1=none
 
-RLMODEL=RL/rl.model
+#RLMODEL=RL/rl.model
 
 if [ $DIM = '11' ]; then
-    PMMODEL=LM/SharonCarter-densenet121-11x11.mdl
-    PMNET='densenet121'
+    #PMMODEL=LM/SharonCarter-densenet121-11x11.mdl
+    #PMNET='densenet121'
+    PMNET0=none
+    PMNET1=none
     BEL_GRIDS=11
     LM_GRIDS=11
     GOAL='2 7'    
 fi
 
 if [ $DIM = '33' ]; then
-    PMMODEL=LM/densenet201-SpiderMan.mdl
-    PMNET='densenet201'
+    #PMMODEL=LM/densenet201-SpiderMan.mdl
+    #PMNET='densenet201'
+    PMNET0=none
+    PMNET1=none
     BEL_GRIDS=33
     LM_GRIDS=33
     GOAL='6 21'
@@ -66,8 +71,10 @@ EPISODE_LENGTH=25
 N_MAPS=1
 
 if [ $MODE = train_lm ]; then
-    UPDATE=$UPDATE' --update-pm-by=GTL '
-    UPDATE=$UPDATE' --schedule-pm --pm-step-size=1000 --pm-decay=0.5 '
+    UPDATE=$UPDATE' --update-pm0-by=GTL '
+    UPDATE=$UPDATE' --update-pm1-by=GTL '
+    UPDATE=$UPDATE' --schedule-pm0 --pm-step-size=1000 --pm-decay=0.5 '
+    UPDATE=$UPDATE' --schedule-pm1 --pm-step-size=1000 --pm-decay=0.5 '
     UPDATE=$UPDATE' -lp='$LP' -pbs=10 --temp=0.1 '
 fi
 
@@ -111,7 +118,7 @@ fi
 
 # If you want to train without popping up the figure window but want to save the figures, uncomment:
 # MPLBACKEND='AGG' \
-python sim/dal_hle.py \
+python sim/dal_hle2.py \
  -v 1 -ug -cr=0.20 --collision-from='scan' \
  -n $N_MAPS $N_EPISODE $EPISODE_LENGTH \
  --lidar-noise=20 \
@@ -126,9 +133,11 @@ python sim/dal_hle.py \
  --rew-bel-gt-nonlog \
  --block-penalty=0.1 --process-error 0.0 0.01 \
  --RL-type=0 \
- --pm-model=$PMMODEL \
+ --pm-model0=$PMMODEL0 \
+ --pm-model1=$PMMODEL1 \
  --rl-model=$RLMODEL \
- --pm-net=$PMNET -ch3=ZERO --drop-rate=0.1 \
+ --pm-net0=$PMNET0 -ch3=ZERO --drop-rate=0.1 \
+ --pm-net1=$PMNET1 -ch3=ZERO --drop-rate=0.1 \
  --save-loc=$SAVE_LOC \
  --init-error=NONE \
  $UPDATE \
