@@ -2668,7 +2668,7 @@ class LocalizationNode:
         if self.args.pm_loss == "KL":
             # print(gtl_high)
             # print(torch.log(gtl_high/likelihood_high))
-            self.loss_ll0 = (gtl * torch.log(gtl/likelihood)).sum()
+            self.loss_ll0 = -(gtl * torch.log(gtl/likelihood)).sum()
             self.loss_ll1 = (gtl_high * torch.log(gtl_high / likelihood_high)).sum()
             
         elif self.args.pm_loss == "L1":
@@ -3914,8 +3914,8 @@ if __name__ == '__main__':
     parser.add_argument("--drop-rate", type=float, default=0.0)
 
     ## LM-PARAMS
-    parser.add_argument('-lp0', '--lrpm0', help="lr for PM0 (1e-5)", type=float, default=1e-5)
-    parser.add_argument('-lp1', '--lrpm1', help="lr for PM1 (1e-5)", type=float, default=1e-5)
+    parser.add_argument('-lp0', '--lrpm0', help="lr for PM0 (1e-4)", type=float, default=1e-4)
+    parser.add_argument('-lp1', '--lrpm1', help="lr for PM1 (1e-4)", type=float, default=1e-4)
     parser.add_argument('-upm0', '--update-pm0-by', help="train PM with GTL,RL,both, none", choices = ['GTL','RL','BOTH','NONE'], default='GTL', type=str)
     parser.add_argument('-upm1', '--update-pm1-by', help="train PM with GTL,RL,both, none", choices = ['GTL','RL','BOTH','NONE'], default='GTL', type=str)
 
