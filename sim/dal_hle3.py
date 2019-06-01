@@ -2533,14 +2533,15 @@ class LocalizationNode:
             ys = locs[1]
             map_img[xs,ys]=1-map_img[xs,ys]
 
-            
-        time_mark = time.time()        
-        if self.perceptual_model0 == None:
-            return self.likelihood
-        else:
-            likelihood = torch.zeros((self.grid_dirs,self.grid_rows, self.grid_cols),
-                                     device=torch.device(self.device), 
-                                     dtype=torch.float)
+
+        return torch.tensor(self.gt_likelihood).float().to(self.device), torch.tensor(self.gt_likelihood_high).float().to(self.device)            
+        # time_mark = time.time()        
+        # if self.perceptual_model0 == None:
+        #     return self.likelihood
+        # else:
+        #     likelihood = torch.zeros((self.grid_dirs,self.grid_rows, self.grid_cols),
+        #                              device=torch.device(self.device), 
+        #                              dtype=torch.float)
 
         if self.args.verbose>1: print("update_likelihood_rotate")
         # if self.args.ch3=="ZERO":
@@ -3897,7 +3898,7 @@ if __name__ == '__main__':
     parser.add_argument('--pm-batch-size', '-pbs', help='batch size of pm model.', default=10, type=int)
     # parser.add_argument('--pm-batch-size', '-pbs', help='batch size of pm model.', default=1, type=int)
 
-    parser.add_argument("-ugl", "--use-gt-likelihood", help="PM = ground truth likelihood", action="store_true")
+    parser.add_argument("-ugl", "--use-gt-likelihood", help="PM = ground truth likelihood", action="store_true", default=True)
     parser.add_argument("--mask", action="store_true", help='mask likelihood with obstacle info')
     parser.add_argument("-ch3","--ch3", choices=['NONE','RAND','ZERO'], type=str, default='NONE')
 
