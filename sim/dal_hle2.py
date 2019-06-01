@@ -531,152 +531,153 @@ class LocalizationNode:
         #end of init
 
     def loop(self): 
+        with torch.autograd.set_detect_anomaly(True):
+            if self.current_state == "new_env_pose":
+                ### place objects in the env
+                self.clear_objects()
+                if self.args.load_map == None or self.args.load_map == "maze":
+                    self.set_maze_grid()
+                    self.set_walls()
+                elif self.args.load_map == 'randombox':
+                    self.random_box()
+                else:
+                    self.read_map()
 
-        if self.current_state == "new_env_pose":
-            ### place objects in the env
-            self.clear_objects()
-            if self.args.load_map == None or self.args.load_map == "maze":
-                self.set_maze_grid()
-                self.set_walls()
-            elif self.args.load_map == 'randombox':
-                self.random_box()
-            else:
-                self.read_map()
+                self.map_for_LM = fill_outer_rim(self.map_for_LM, self.map_rows, self.map_cols)
+                if self.args.distort_map:
+                    self.map_for_LM = distort_map(self.map_for_LM, self.map_rows, self.map_cols)
+                    
+                self.make_low_dim_maps()
 
-            self.map_for_LM = fill_outer_rim(self.map_for_LM, self.map_rows, self.map_cols)
-            if self.args.distort_map:
-                self.map_for_LM = distort_map(self.map_for_LM, self.map_rows, self.map_cols)
-                
-            self.make_low_dim_maps()
+                if self.args.gtl_off == False:
+                    self.get_synth_scan_mp(self.scans_over_map, map_img=self.map_for_LM, xlim=self.xlim, ylim=self.ylim) # generate synthetic scan data over the map (and directions)
+                    self.get_synth_scan_mp_high(self.scans_over_map_high, map_img=self.map_for_LM, xlim=self.xlim, ylim=self.ylim)
 
-            if self.args.gtl_off == False:
-                self.get_synth_scan_mp(self.scans_over_map, map_img=self.map_for_LM, xlim=self.xlim, ylim=self.ylim) # generate synthetic scan data over the map (and directions)
-                self.get_synth_scan_mp_high(self.scans_over_map_high, map_img=self.map_for_LM, xlim=self.xlim, ylim=self.ylim)
+                self.reset_explored()
+                if self.args.init_pose is not None:
+                    placed = self.set_init_pose()
+                else:
+                    placed = self.place_turtle()
+                    
+                if placed:
+                    self.current_state = "update_likelihood"
+                else:
+                    print ("place turtle failed. trying a new map")
+                    return
 
-            self.reset_explored()
-            if self.args.init_pose is not None:
-                placed = self.set_init_pose()
-            else:
-                placed = self.place_turtle()
-                
-            if placed:
+                if self.args.figure==True:
+                    self.update_figure(newmap=True)
+
+            
+            elif self.current_state == "new_pose":
+                self.reset_explored()
+
+                if self.args.init_pose is not None:
+                    placed = self.set_init_pose()
+                else:
+                    placed = self.place_turtle()
+
                 self.current_state = "update_likelihood"
-            else:
-                print ("place turtle failed. trying a new map")
-                return
+                
 
-            if self.args.figure==True:
-                self.update_figure(newmap=True)
+            elif self.current_state == "update_likelihood":
+                self.get_lidar()
+                
+                self.update_explored()            
 
-        
-        elif self.current_state == "new_pose":
-            self.reset_explored()
+                
+                if self.step_count == 0:
+                    self.save_roll_out = self.args.save & np.random.choice([False, True], p=[1.0-self.args.prob_roll_out, self.args.prob_roll_out])
+                    if self.save_roll_out:
+                        #save roll-out for next episode.
+                        self.roll_out_filepath = os.path.join(self.log_dir, 'roll-out-%03d-%03d.txt'%(self.env_count,self.episode_count))
+                        print ('roll-out saving: %s'%self.roll_out_filepath)
+                self.scan_2d, self.scan_2d_low = self.get_scan_2d_n_headings(self.scan_data, self.xlim, self.ylim)
+                self.slide_scan()
+                ### 2. update likelihood from observation
 
-            if self.args.init_pose is not None:
-                placed = self.set_init_pose()
-            else:
-                placed = self.place_turtle()
+                time_mark = time.time()            
+                self.compute_gtl(self.scans_over_map)
+                self.compute_gtl_high(self.scans_over_map_high)
+                self.gtl_time = time.time()-time_mark
+                print ("[TIME for GTL] %.2f sec"%(time.time()-time_mark))
 
-            self.current_state = "update_likelihood"
-            
+                if self.args.generate_data: # end the episode ... (no need for measurement/motion model)
+                    self.generate_data()
+                    if self.args.figure:             
+                        self.update_figure()
 
-        elif self.current_state == "update_likelihood":
-            self.get_lidar()
-            
-            self.update_explored()            
+                        plt.pause(1e-4)
+                    self.next_step()
+                    return
 
-            
-            if self.step_count == 0:
-                self.save_roll_out = self.args.save & np.random.choice([False, True], p=[1.0-self.args.prob_roll_out, self.args.prob_roll_out])
+                self.likelihood, self.likelihood_high = self.update_likelihood_rotate(self.map_for_LM, self.scan_2d)
+
+                
+                if self.args.mask:
+                    self.mask_likelihood()
+                # self.likelihood.register_hook(print)
+                ### z(t) = like x belief
+
+                ### z(t) = like x belief
+                # if self.collision == False:
+                self.product_belief()
+                self.belief = self.belief.reshape((4,11,11))
+
+                ### reward r(t)
+                self.update_bel_list()
+                self.get_reward()
+
+
+                ### action a(t) given s(t) = (z(t)|Map)
+                if self.args.verbose>0:          
+                    self.report_status(end_episode=False)
                 if self.save_roll_out:
-                    #save roll-out for next episode.
-                    self.roll_out_filepath = os.path.join(self.log_dir, 'roll-out-%03d-%03d.txt'%(self.env_count,self.episode_count))
-                    print ('roll-out saving: %s'%self.roll_out_filepath)
-            self.scan_2d, self.scan_2d_low = self.get_scan_2d_n_headings(self.scan_data, self.xlim, self.ylim)
-            self.slide_scan()
-            ### 2. update likelihood from observation
-
-            time_mark = time.time()            
-            self.compute_gtl(self.scans_over_map)
-            self.compute_gtl_high(self.scans_over_map_high)
-            self.gtl_time = time.time()-time_mark
-            print ("[TIME for GTL] %.2f sec"%(time.time()-time_mark))
-
-            if self.args.generate_data: # end the episode ... (no need for measurement/motion model)
-                self.generate_data()
+                    self.collect_data()
                 if self.args.figure:             
                     self.update_figure()
 
-                    plt.pause(1e-4)
+                if self.step_count >= self.step_max-1:
+                    self.run_action_module(no_update_fig=True)
+                    self.skip_to_end = True
+                else:
+                    self.run_action_module()
+
+                if self.skip_to_end:
+                    self.skip_to_end = False
+                    self.next_ep()
+                    return
+                
+                ### environment: set target
+                self.update_target_pose()
+
+                
+                # do the rest: ation, trans-belief, update gt
+                self.collision_check()
+                self.execute_action_teleport()
+
+                ### environment: change belief z_hat(t+1)
+                self.transit_belief()
+
+
+                ### increase time step
+                # self.update_current_pose()
+
+                
+                if self.collision == False:
+                    self.update_true_grid()
+                
+
+
                 self.next_step()
                 return
 
-            self.likelihood = self.update_likelihood_rotate(self.map_for_LM, self.scan_2d)
-
-            
-            if self.args.mask:
-                self.mask_likelihood()
-            # self.likelihood.register_hook(print)
-            ### z(t) = like x belief
-
-            ### z(t) = like x belief
-            # if self.collision == False:
-            self.product_belief()
-
-            ### reward r(t)
-            self.update_bel_list()
-            self.get_reward()
-
-
-            ### action a(t) given s(t) = (z(t)|Map)
-            if self.args.verbose>0:          
-                self.report_status(end_episode=False)
-            if self.save_roll_out:
-                self.collect_data()
-            if self.args.figure:             
-                self.update_figure()
-
-            if self.step_count >= self.step_max-1:
-                self.run_action_module(no_update_fig=True)
-                self.skip_to_end = True
             else:
-                self.run_action_module()
+                print("undefined state name %s"%self.current_state)
+                self.current_state = None
+                exit()
 
-            if self.skip_to_end:
-                self.skip_to_end = False
-                self.next_ep()
-                return
-            
-            ### environment: set target
-            self.update_target_pose()
-
-            
-            # do the rest: ation, trans-belief, update gt
-            self.collision_check()
-            self.execute_action_teleport()
-
-            ### environment: change belief z_hat(t+1)
-            self.transit_belief()
-
-
-            ### increase time step
-            # self.update_current_pose()
-
-            
-            if self.collision == False:
-                self.update_true_grid()
-            
-
-
-            self.next_step()
             return
-
-        else:
-            print("undefined state name %s"%self.current_state)
-            self.current_state = None
-            exit()
-
-        return
 
 
     def get_statistics(self, dis, name):
@@ -1272,7 +1273,7 @@ class LocalizationNode:
             dist = sum(self.manhattans)
         else:
             reward = self.rewards[-1]
-            loss = self.loss_ll
+            loss = self.loss_ll0
             dist = self.manhattan
         eucl = self.get_euclidean()
         
@@ -2570,8 +2571,9 @@ class LocalizationNode:
         # output_softmax  = F.softmax(output.view([1,-1])/self.args.temperature, dim= 1) # shape (1,484)
 
         output0 = self.perceptual_model0(input_batch0)
-        output_softmax  = F.softmax(output0.view([1,-1])/self.args.temperature, dim= 1)
-        output0 = output_softmax.reshape((1, self.grid_dirs, self.grid_rows, self.grid_cols))
+        # output_softmax  = F.softmax(output0.view([1,-1])/self.args.temperature, dim= 1)
+        output0  = F.softmax(output0/self.args.temperature, dim=0)
+        # output0 = output_softmax.reshape((1, self.grid_dirs, self.grid_rows, self.grid_cols))
 
         bs, a,b,c = output0.shape # get the output shape
         u = torch.reshape(output0, (-1, a*b*c))
@@ -2580,7 +2582,8 @@ class LocalizationNode:
         y = (idx%(b*c))/b
         z = (idx%(b*c))%c
 
-        output1 = torch.zeros((bs, 4, 88, 88))
+        output1 = torch.ones((bs, 4, 88, 88))
+        output1 = output1/torch.sum(output1)
         for btc in range(self.cells):
             scan_cut = torch.zeros((bs, 4, 32, 32))
             map_cut = torch.zeros((bs, 32, 32))
@@ -2614,10 +2617,13 @@ class LocalizationNode:
             input_batch1[:,1:5,:,:] = scan_cut
             output_cut = self.perceptual_model1(input_batch1)
             # print(size(input_batch1))
-            weight = output0[:,dire,row,col].unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
-            print(weight.shape)
-            print(output_cut.shape)
-            output1[:, :, row*8:(row+1)*8, col*8:(col+1)*8] = weight *output_cut
+            # weight = output0[:,dire,row,col].unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+            weighter = output0[0, dire, row, col]
+            # print(weight.shape)
+            # print(output_cut.shape)
+            output1[:, :, row*8:(row+1)*8, col*8:(col+1)*8] = weighter *output_cut
+            # output1[:, :, row*8:(row+1)*8, col*8:(col+1)*8] = output_cut
+
 
         # if self.args.n_lm_grids !=  self.args.n_local_grids:
         #     # LM output size != localization space size: adjust LM output to fit to localization space.
@@ -2631,14 +2637,24 @@ class LocalizationNode:
         #     likelihood = output_softmax.reshape(likelihood.shape)
 
         likelihood = output0
-        likelihood /= likelihood.sum()
+        # likelihood /= likelihood.sum()
+        likelihood = torch.clamp(likelihood, 1e-9, 1.0)
         likelihood_high = output1
-        likelihood_high = F.softmax(likelihood_high.view([1,-1])/self.args.temperature, dim= 1)
-        likelihood_high = likelihood_high.reshape((1, self.grid_dirs, self.map_rows, self.map_cols))
-
+        # print("first", likelihood_high)
+        # likelihood_high = torch.clamp(likelihood_high, 1e-9, 1.0)
+        # print("second", likelihood_high)
+        likelihood_high = F.softmax(likelihood_high/self.args.temperature, dim=0)
+        # likelihood_high = likelihood_high.reshape((1, self.grid_dirs, self.map_rows, self.map_cols))
+        # print("third", likelihood_high)
+        # likelihood_high = torch.clamp(likelihood_high, 1e-9, 1.0)
+        # print("fourth", likelihood_high)
+        # likelihood_high /= likelihood_high.sum()
+        # print("fifth", likelihood_high)
+        likelihood_high = torch.clamp(likelihood_high, 1e-9, 1.0)
+        # print("final", likelihood_high)
         self.lm_time = time.time()-time_mark
         print ("[TIME for LM] %.2f sec"%(self.lm_time))
-        del output_softmax, input_batch0, input_batch1, output0, output1        
+        # del input_batch0, input_batch1, output0, output1        
         if compute_loss:
             self.compute_loss(likelihood, likelihood_high)
         return likelihood, likelihood_high
@@ -2650,6 +2666,8 @@ class LocalizationNode:
         gtl_high = torch.tensor(self.gt_likelihood_high).float().to(self.device)
 
         if self.args.pm_loss == "KL":
+            # print(gtl_high)
+            # print(torch.log(gtl_high/likelihood_high))
             self.loss_ll0 = (gtl * torch.log(gtl/likelihood)).sum()
             self.loss_ll1 = (gtl_high * torch.log(gtl_high / likelihood_high)).sum()
             
@@ -2676,7 +2694,9 @@ class LocalizationNode:
                 self.back_prop_pm1()
                 self.loss_likelihood1 = []
 
-        del gtl, gtl_high
+            print(self.loss_ll0, self.loss_ll1)
+
+        # del gtl, gtl_high
                 
 
     def mask_likelihood(self):
@@ -2698,7 +2718,7 @@ class LocalizationNode:
             self.belief = self.belief * (gt)
             #self.belief = self.belief * (self.gt_likelihood)
         else:
-            likelihood = torch.tensor(self.likelihood).float().to(self.device)
+            likelihood = self.likelihood.clone().detach().requires_grad_(True)
             self.belief = self.belief * likelihood
         #normalize belief
         self.belief /= self.belief.sum()
@@ -2712,7 +2732,7 @@ class LocalizationNode:
             self.belief_high = self.belief_high * (gt_high)
             #self.belief = self.belief * (self.gt_likelihood)
         else:
-            likelihood_high = torch.tensor(self.likelihood_high).float().to(self.device)
+            likelihood_high = self.likelihood_high.clone().detach().requires_grad_(True)
             self.belief_high = self.belief_high * likelihood_high
         #normalize belief
         self.belief /= self.belief.sum()
@@ -2794,6 +2814,7 @@ class LocalizationNode:
                 belief_downsample[i,:,:] = bel
             belief_downsample /= belief_downsample.sum()
             belief_downsample = torch.from_numpy(belief_downsample).float().to(self.device)
+        belief_downsample = belief_downsample.reshape((4,11,11))
 
         if self.args.n_state_grids == self.args.n_local_grids and self.args.n_state_dirs == self.args.n_headings:
             # no downsample. preserve the path for backprop
@@ -2823,7 +2844,7 @@ class LocalizationNode:
             state2 = torch.stack((torch.from_numpy(self.map_for_LM.astype(np.float32)), torch.from_numpy(self.scan_2d_slide.astype(np.float32))), dim=0)
 
 
-        if self.args.update_pm_by=="BOTH" or self.args.update_pm_by=="RL":
+        if self.args.update_pm1_by=="BOTH" or self.args.update_pm1_by=="RL":
             if self.args.RL_type == 2:
                 value, logit, (self.hx, self.cx) = self.policy_model.forward((state.unsqueeze(0), state2.unsqueeze(0), (self.hx, self.cx)))
             else:
@@ -2891,7 +2912,7 @@ class LocalizationNode:
         else:
             self.collision_attempt = 0                    
         
-        del state, log_prob, value, action, belief_downsample, entropy, prob
+        # del state, log_prob, value, action, belief_downsample, entropy, prob
 
     def navigate(self):
         if not hasattr(self, 'map_to_N'):
@@ -3257,6 +3278,7 @@ class LocalizationNode:
                     shft_hrz = shift(bel[i,:,:], int(DY), axis=1, fill=prior)
                     bel[i,:,:]=shift(shft_hrz, int(DX), axis=0, fill=prior)
 
+        print(bel.shape)
         if self.args.trans_belief == "stoch-shift" and action != "hold":
             for ch in range(self.grid_dirs):
                 bel[ch,:,:] = ndimage.gaussian_filter(bel[ch,:,:], sigma=self.sigma_xy)
@@ -3302,16 +3324,19 @@ class LocalizationNode:
             self.reward_vector[2] += torch.log(N*self.belief[self.true_grid.head,self.true_grid.row,self.true_grid.col]).item() #detach().cpu().numpy()
             self.reward += torch.log(N*self.belief[self.true_grid.head,self.true_grid.row,self.true_grid.col]).item() #.data #detach().cpu().numpy()
 
-        if self.args.rew_bel_gt_nonlog: # and self.collision_attempt==0:
-            self.reward_vector[2] += self.belief[self.true_grid.head,self.true_grid.row,self.true_grid.col].item()#detach().cpu().numpy()
-            self.reward += self.belief[self.true_grid.head, self.true_grid. row,self.true_grid.col].item()#detach().cpu().numpy()
+        # print(self.belief.shape, self.reward_vector.shape)
+        # self.belief = np.squeeze(self.belief, axis=0)
+        # print(self.belief.shape, self.reward_vector.shape)
+        # if self.args.rew_bel_gt_nonlog: # and self.collision_attempt==0:
+        #     self.reward_vector[2] += self.belief[self.true_grid.head,self.true_grid.row,self.true_grid.col].item()#detach().cpu().numpy()
+        #     self.reward += self.belief[self.true_grid.head, self.true_grid. row,self.true_grid.col].item()#detach().cpu().numpy()
 
-        if self.args.rew_KL_bel_gt: # and self.collision_attempt==0:
-            bel_gt = self.belief[self.true_grid.head, self.true_grid.row, self.true_grid.col].item()#detach().cpu().numpy()
-            N = self.grid_dirs*self.grid_rows*self.grid_cols
-            new_bel_gt = 1.0/N * np.log(N*np.clip(bel_gt,1e-9,1.0))
-            self.reward_vector[2] += new_bel_gt
-            self.reward += new_bel_gt #torch.Tensor([new_bel_gt])
+        # if self.args.rew_KL_bel_gt: # and self.collision_attempt==0:
+        #     bel_gt = self.belief[self.true_grid.head, self.true_grid.row, self.true_grid.col].item()#detach().cpu().numpy()
+        #     N = self.grid_dirs*self.grid_rows*self.grid_cols
+        #     new_bel_gt = 1.0/N * np.log(N*np.clip(bel_gt,1e-9,1.0))
+        #     self.reward_vector[2] += new_bel_gt
+        #     self.reward += new_bel_gt #torch.Tensor([new_bel_gt])
 
         if self.args.rew_infogain: # and self.collision_attempt==0:
             #entropy = -p*log(p)
@@ -3437,7 +3462,8 @@ class LocalizationNode:
 
 
     def back_prop_pm0(self):
-        if self.args.update_pm_by=="GTL" or self.args.update_pm_by=="BOTH":
+        print("*********************back_prop_pm0********************")
+        if self.args.update_pm0_by=="GTL" or self.args.update_pm0_by=="BOTH":
             self.optimizer_pm0.zero_grad()
             (sum(self.loss_likelihood0)/float(len(self.loss_likelihood0))).backward(retain_graph = True)
             self.optimizer_pm0.step()
@@ -3450,6 +3476,7 @@ class LocalizationNode:
             if self.args.save and self.pm_backprop_cnt % self.args.mdl_save_freq == 0:
                 torch.save(self.perceptual_model0.state_dict(), self.pm_filepath0)
                 print ('perceptual model 0 saved at %s.'%self.pm_filepath0)
+
         else:
             return
         if self.args.verbose>0:
@@ -3457,9 +3484,11 @@ class LocalizationNode:
 
 
     def back_prop_pm1(self):
-        if self.args.update_pm_by=="GTL" or self.args.update_pm_by=="BOTH":
+        if self.args.update_pm1_by=="GTL" or self.args.update_pm1_by=="BOTH":
             self.optimizer_pm1.zero_grad()
-            (sum(self.loss_likelihood1)/float(len(self.loss_likelihood1))).backward(retain_graph = True)
+            # (sum(self.loss_likelihood1)/float(len(self.loss_likelihood1))).backward(retain_graph = True)
+            total_loss = sum(self.loss_likelihood1)
+            total_loss.backward()
             self.optimizer_pm1.step()
 
             mean_test_loss = sum(self.loss_likelihood1).item()
@@ -3574,7 +3603,7 @@ class LocalizationNode:
                 print ('output saved at %s'%self.log_filepath)
             # save parameters
 
-            if self.args.update_pm_by != "NONE":
+            if self.args.update_pm1_by != "NONE":
                 torch.save(self.perceptual_model0.state_dict(), self.pm_filepath0)
                 torch.save(self.perceptual_model1.state_dict(), self.pm_filepath1)
                 print ('perceptual modelss saved at %s.'%self.pm_filepath0)
@@ -3866,6 +3895,7 @@ if __name__ == '__main__':
     parser.set_defaults(shade=False)
 
     parser.add_argument('--pm-batch-size', '-pbs', help='batch size of pm model.', default=10, type=int)
+    # parser.add_argument('--pm-batch-size', '-pbs', help='batch size of pm model.', default=1, type=int)
 
     parser.add_argument("-ugl", "--use-gt-likelihood", help="PM = ground truth likelihood", action="store_true")
     parser.add_argument("--mask", action="store_true", help='mask likelihood with obstacle info')
