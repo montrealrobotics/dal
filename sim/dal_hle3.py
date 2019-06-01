@@ -621,8 +621,13 @@ class LocalizationNode:
 
                 ### z(t) = like x belief
                 # if self.collision == False:
+
                 self.product_belief()
                 self.belief = self.belief.reshape((4,11,11))
+                for ii in range(self.rows):
+                    for jj in range(self.cols):
+                        for kk in rangera
+                        self.belief_high[ii*8: (ii+1)*8]
 
                 ### reward r(t)
                 self.update_bel_list()

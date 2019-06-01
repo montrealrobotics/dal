@@ -1269,7 +1269,7 @@ class LocalizationNode:
     def report_status(self,end_episode=False):
         if end_episode:
             reward = sum(self.rewards)
-            loss = self.loss_ll #sum(self.loss_likelihood)
+            loss = self.loss_ll0 #sum(self.loss_likelihood)
             dist = sum(self.manhattans)
         else:
             reward = self.rewards[-1]
@@ -1288,8 +1288,8 @@ class LocalizationNode:
 
         if self.args.save:
             with open(self.log_filepath,'a') as flog:
-                flog.write('%d %d %d %f %f %f %f %f %f %f %f %e %e %f %f %f %f\n'%(self.env_count, self.episode_count,self.step_count,
-                                                                                   loss, dist, reward,
+                flog.write('%d %d %d %f %f %f %f %f %f %f %f %f %e %e %f %f %f %f\n'%(self.env_count, self.episode_count,self.step_count,
+                                                                                      self.loss_ll0, self.loss_ll1, dist, reward,
                                                                                    self.loss_policy, self.loss_value, 
                                                                                    self.prob[0,0],self.prob[0,1],self.prob[0,2],
                                                                                    lr_rl,
@@ -1300,8 +1300,8 @@ class LocalizationNode:
                                                                                    self.lm_time
                                                                                    
                                                                    ))
-        print('%d %d %d %f %f %f %f %f %f %f %f %e %e %f %f %f %f'%(self.env_count, self.episode_count,self.step_count,
-                                                        loss, dist, reward,
+        print('%d %d %d %f %f %f %f %f %f %f %f %f %e %e %f %f %f %f'%(self.env_count, self.episode_count,self.step_count,
+                                                                       self.loss_ll0, self.loss_ll1, dist, reward,
                                                         self.loss_policy, self.loss_value, 
                                                         self.prob[0,0],self.prob[0,1],self.prob[0,2],
                                                         lr_rl,
@@ -2572,10 +2572,15 @@ class LocalizationNode:
 
         output0 = self.perceptual_model0(input_batch0)
         # output_softmax  = F.softmax(output0.view([1,-1])/self.args.temperature, dim= 1)
-        output0  = F.softmax(output0/self.args.temperature, dim=0)
+        shape0= (output0.shape) # (1,4,11,11)
+        # output0  = F.softmax(output0/self.args.temperature, dim=0)
+        output0  = F.softmax(output0.view(-1)/self.args.temperature, dim=0)
         # output0 = output_softmax.reshape((1, self.grid_dirs, self.grid_rows, self.grid_cols))
 
+        output0= output0.reshape(shape0)
+        # print (output0.sum()) # 1.0
         bs, a,b,c = output0.shape # get the output shape
+        # print (a,b,c)
         u = torch.reshape(output0, (-1, a*b*c))
         _, idx = torch.topk(output0.view(output0.shape[0], -1), dim=-1, k=self.cells) 
         x = idx/(b*c)
@@ -2643,7 +2648,10 @@ class LocalizationNode:
         # print("first", likelihood_high)
         # likelihood_high = torch.clamp(likelihood_high, 1e-9, 1.0)
         # print("second", likelihood_high)
-        likelihood_high = F.softmax(likelihood_high/self.args.temperature, dim=0)
+        high_shape = likelihood_high.shape
+        likelihood_high = F.softmax(likelihood_high.view(-1)/self.args.temperature, dim=0)
+        likelihood_high = likelihood_high.reshape(high_shape)
+        # print (likelihood_high.sum()) # 1.
         # likelihood_high = likelihood_high.reshape((1, self.grid_dirs, self.map_rows, self.map_cols))
         # print("third", likelihood_high)
         # likelihood_high = torch.clamp(likelihood_high, 1e-9, 1.0)
@@ -2665,15 +2673,19 @@ class LocalizationNode:
         gtl = torch.tensor(self.gt_likelihood).float().to(self.device)
         gtl_high = torch.tensor(self.gt_likelihood_high).float().to(self.device)
 
-        if self.args.pm_loss == "KL":
-            # print(gtl_high)
-            # print(torch.log(gtl_high/likelihood_high))
-            self.loss_ll0 = -(gtl * torch.log(gtl/likelihood)).sum()
-            self.loss_ll1 = (gtl_high * torch.log(gtl_high / likelihood_high)).sum()
+        print("yes, computing new loss")
+        criterion = nn.MSELoss()
+        self.loss_ll0 = 10000.0*criterion(gtl, likelihood)
+        self.loss_ll1 = 100000.0*criterion(gtl_high, likelihood_high)
+        # if self.args.pm_loss == "KL":
+        #     # print(gtl_high)
+        #     # print(torch.log(gtl_high/likelihood_high))
+        #     self.loss_ll0 = (gtl * torch.log(gtl/likelihood)).sum()
+        #     self.loss_ll1 = (gtl_high * torch.log(gtl_high / likelihood_high)).sum()
             
-        elif self.args.pm_loss == "L1":
-            self.loss_ll0 = torch.abs(likelihood - gtl).sum()
-            self.loss_ll1 = torch.abs(likelihood_high - gtl_high).sum()
+        # elif self.args.pm_loss == "L1":
+        #     self.loss_ll0 = torch.abs(likelihood - gtl).sum()
+        #     self.loss_ll1 = torch.abs(likelihood_high - gtl_high).sum()
 
         if self.args.update_pm1_by=="GTL" or self.args.update_pm1_by=="BOTH":
             if len(self.loss_likelihood0) < self.args.pm_batch_size:
@@ -3779,7 +3791,7 @@ if __name__ == '__main__':
 
     
     ## MAPS, EPISODES, MOTIONS
-    parser.add_argument("-n", "--num", help = "num envs, episodes, steps", nargs=3, default=[1,10, 10], type=int)    
+    parser.add_argument("-n", "--num", help = "num envs, episodes, steps", nargs=3, default=[1,10000, 10], type=int)    
     parser.add_argument("--load-map", help = "load an actual map", type=str, default=None)
     parser.add_argument("--distort-map", action="store_true")
     parser.add_argument("--flip-map", help = "flip n pixels 0 <--> 1 in map image", type=int, default=0)
