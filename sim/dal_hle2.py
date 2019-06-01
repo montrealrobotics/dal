@@ -148,6 +148,7 @@ class LocalizationNode:
         self.grid_rows = self.args.n_local_grids #self.args.map_size * self.args.sub_resolution
         self.grid_cols = self.args.n_local_grids #self.args.map_size * self.args.sub_resolution
         self.grid_dirs = self.args.n_headings
+        self.map_rows, self.map_cols = 88, 88
 
         num_dirs = 1
 
@@ -309,7 +310,7 @@ class LocalizationNode:
                 #                                    verbose = True)
         models = []
         
-        if self.args.update_pm_by=="RL" or self.args.update_pm_by=="BOTH":
+        if self.args.update_pm1_by=="RL" or self.args.update_pm1_by=="BOTH":
             models = models + list(self.perceptual_model0.parameters()) +list(perceptual_model1.parameters())
         if self.args.update_rl:
             models = models + list(self.policy_model.parameters())
@@ -472,6 +473,10 @@ class LocalizationNode:
 
         self.the_mask_high = torch.tensor(np.ones([self.grid_dirs, self.map_rows, self.map_cols])).float().to(self.device)
         self.the_mask = torch.tensor(np.ones([self.grid_dirs, self.grid_rows, self.grid_cols])).float().to(self.device)
+
+        self.cells = args.cells
+        self.criti = args.criti
+        self.thresh = args.thresh
 
         if self.args.save:
             home=os.environ['HOME']
@@ -2633,7 +2638,7 @@ class LocalizationNode:
 
         self.lm_time = time.time()-time_mark
         print ("[TIME for LM] %.2f sec"%(self.lm_time))
-        del output_softmax, input_batch, output        
+        del output_softmax, input_batch0, input_batch1, output0, output1        
         if compute_loss:
             self.compute_loss(likelihood, likelihood_high)
         return likelihood, likelihood_high
@@ -2652,7 +2657,7 @@ class LocalizationNode:
             self.loss_ll0 = torch.abs(likelihood - gtl).sum()
             self.loss_ll1 = torch.abs(likelihood_high - gtl_high).sum()
 
-        if self.args.update_pm_by=="GTL" or self.args.update_pm_by=="BOTH":
+        if self.args.update_pm1_by=="GTL" or self.args.update_pm1_by=="BOTH":
             if len(self.loss_likelihood0) < self.args.pm_batch_size:
                 self.loss_likelihood0.append(self.loss_ll0)
                 if self.args.verbose > 2:
@@ -2693,9 +2698,25 @@ class LocalizationNode:
             self.belief = self.belief * (gt)
             #self.belief = self.belief * (self.gt_likelihood)
         else:
-            self.belief = self.belief * (self.likelihood)
+            likelihood = torch.tensor(self.likelihood).float().to(self.device)
+            self.belief = self.belief * likelihood
         #normalize belief
         self.belief /= self.belief.sum()
+        #update bel_grid
+        guess = np.unravel_index(np.argmax(self.belief.cpu().detach().numpy(), axis=None), self.belief.shape)
+        self.bel_grid = Grid(head=guess[0],row=guess[1],col=guess[2])
+
+        if self.args.use_gt_likelihood :
+            # gt = torch.from_numpy(self.gt_likelihood/self.gt_likelihood.sum()).float().to(self.divice)
+            gt_high = torch.tensor(self.gt_likelihood_high).float().to(self.device)
+            self.belief_high = self.belief_high * (gt_high)
+            #self.belief = self.belief * (self.gt_likelihood)
+        else:
+            likelihood_high = torch.tensor(self.likelihood_high).float().to(self.device)
+            self.belief_high = self.belief_high * likelihood_high
+        #normalize belief
+        self.belief /= self.belief.sum()
+        self.belief_high /= self.belief_high.sum()
         #update bel_grid
         guess = np.unravel_index(np.argmax(self.belief.cpu().detach().numpy(), axis=None), self.belief.shape)
         self.bel_grid = Grid(head=guess[0],row=guess[1],col=guess[2])
@@ -3863,7 +3884,8 @@ if __name__ == '__main__':
     parser.add_argument("--drop-rate", type=float, default=0.0)
 
     ## LM-PARAMS
-    parser.add_argument('-lp', '--lrpm', help="lr for PM (1e-5)", type=float, default=1e-5)
+    parser.add_argument('-lp0', '--lrpm0', help="lr for PM0 (1e-5)", type=float, default=1e-5)
+    parser.add_argument('-lp1', '--lrpm1', help="lr for PM1 (1e-5)", type=float, default=1e-5)
     parser.add_argument('-upm0', '--update-pm0-by', help="train PM with GTL,RL,both, none", choices = ['GTL','RL','BOTH','NONE'], default='GTL', type=str)
     parser.add_argument('-upm1', '--update-pm1-by', help="train PM with GTL,RL,both, none", choices = ['GTL','RL','BOTH','NONE'], default='GTL', type=str)
 
@@ -3892,6 +3914,13 @@ if __name__ == '__main__':
 
     parser.add_argument('--generate-data-single-map', action="store_true")
     parser.add_argument('--generate-data-n-maps', action="store_true")
+
+    parser.add_argument('-thresh', '--thresh', help="threshold for masking", type=float, default=0.0)
+    parser.add_argument("-bs", '--batch-size', help="batch size", type=int, default=32)
+    parser.add_argument("-epochs", '--epochs', help="epochs", type=int, default=100)
+    parser.add_argument("-criti", '--criti', help="loss function critetion", type=str, default='mse')
+    parser.add_argument("-cells", '--cells', help="cells", type=int, default=32)
+
 
     args = parser.parse_args()
 
