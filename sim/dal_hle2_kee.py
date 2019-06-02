@@ -625,13 +625,11 @@ class LocalizationNode:
 
                 ### z(t) = like x belief
                 # if self.collision == False:
-
                 self.product_belief()
+                print ('bel ', self.belief.shape)
+                print ('bel2', self.belief_high.shape)
                 self.belief = self.belief.reshape((4,11,11))
-                # for ii in range(self.grid_rows):
-                #     for jj in range(self.grid_cols):
-                #         for kk in range(4):
-                #             self.belief_high[kk, ii*8: (ii+1)*8, jj*8 : (jj+1)*8] = self.belief[kk, ii, jj] * self.likelihood_high[kk, ii*8: (ii+1)*8, jj*8 : (jj+1)*8]
+
 
                 ### reward r(t)
                 self.update_bel_list()
@@ -2614,34 +2612,16 @@ class LocalizationNode:
             ys = locs[1]
             map_img[xs,ys]=1-map_img[xs,ys]
 
-
-        return torch.tensor(self.gt_likelihood).float().to(self.device), torch.tensor(self.gt_likelihood_high).float().to(self.device)            
-        # time_mark = time.time()        
-        # if self.perceptual_model0 == None:
-        #     return self.likelihood
-        # else:
-        #     likelihood = torch.zeros((self.grid_dirs,self.grid_rows, self.grid_cols),
-        #                              device=torch.device(self.device), 
-        #                              dtype=torch.float)
+            
+        time_mark = time.time()        
+        if self.perceptual_model0 == None:
+            return self.likelihood
+        else:
+            likelihood = torch.zeros((self.grid_dirs,self.grid_rows, self.grid_cols),
+                                     device=torch.device(self.device), 
+                                     dtype=torch.float)
 
         if self.args.verbose>1: print("update_likelihood_rotate")
-        # if self.args.ch3=="ZERO":
-        #     input_batch = np.zeros((self.grid_dirs, 3, self.map_rows, self.map_cols))            
-        #     for i in range(self.grid_dirs): # for all orientations
-        #         input_batch[i, 0, :,:] = map_img
-        #         input_batch[i, 1, :,:] = scan_imgs[i,:,:]
-        #         input_batch[i, 2, :,:] = np.zeros_like(map_img)
-        # elif self.args.ch3=="RAND":
-        #     input_batch = np.zeros((self.grid_dirs, 3, self.map_rows, self.map_cols))            
-        #     for i in range(self.grid_dirs): # for all orientations
-        #         input_batch[i, 0, :,:] = map_img
-        #         input_batch[i, 1, :,:] = scan_imgs[i,:,:]
-        #         input_batch[i, 2, :,:] = np.random.random(map_img.shape)
-        # else:
-        #     input_batch = np.zeros((self.grid_dirs, 2, self.map_rows, self.map_cols))            
-        #     for i in range(self.grid_dirs): # for all orientations
-        #         input_batch[i, 0, :,:] = map_img
-        #         input_batch[i, 1, :,:] = scan_imgs[i,:,:]
 
         input_batch0 = np.zeros((1, 5, self.map_rows, self.map_cols))
         input_batch0[0,0,:,:] = map_img
@@ -2649,15 +2629,13 @@ class LocalizationNode:
 
         input_batch0 = torch.from_numpy(input_batch0).float()
         
-        # output = self.perceptual_model.forward(input_batch)
-        # output_softmax  = F.softmax(output.view([1,-1])/self.args.temperature, dim= 1) # shape (1,484)
-
         output0 = self.perceptual_model0(input_batch0)
-        # output_softmax  = F.softmax(output0.view([1,-1])/self.args.temperature, dim= 1)
-        output0  = F.softmax(output0/self.args.temperature, dim=0)
-        # output0 = output_softmax.reshape((1, self.grid_dirs, self.grid_rows, self.grid_cols))
-
+        shape0= (output0.shape) # (1,4,11,11)
+        output0  = F.softmax(output0.view(-1)/self.args.temperature, dim=0)
+        output0= output0.reshape(shape0)
+        # print (output0.sum()) # 1.0
         bs, a,b,c = output0.shape # get the output shape
+        # print (a,b,c)
         u = torch.reshape(output0, (-1, a*b*c))
         _, idx = torch.topk(output0.view(output0.shape[0], -1), dim=-1, k=self.cells) 
         x = idx/(b*c)
@@ -2707,42 +2685,25 @@ class LocalizationNode:
             # output1[:, :, row*8:(row+1)*8, col*8:(col+1)*8] = output_cut
 
 
-        # if self.args.n_lm_grids !=  self.args.n_local_grids:
-        #     # LM output size != localization space size: adjust LM output to fit to localization space.
-        #     nrows = self.args.n_lm_grids #self.grid_rows/self.args.sub_resolution
-        #     ncols = self.args.n_lm_grids #self.grid_cols/self.args.sub_resolution
-        #     like = output_softmax.cpu().detach().numpy().reshape((self.grid_dirs, nrows, ncols))
-        #     for i in range(self.grid_dirs):
-        #         likelihood[i,:,:] = torch.tensor(cv2.resize(like[i,:,:], (self.grid_rows,self.grid_cols))).float().to(self.device)
-        #     likelihood /= likelihood.sum()
-        # else:
-        #     likelihood = output_softmax.reshape(likelihood.shape)
-
         likelihood = output0
-        # likelihood /= likelihood.sum()
         likelihood = torch.clamp(likelihood, 1e-9, 1.0)
         likelihood_high = output1
         # print("first", likelihood_high)
         # likelihood_high = torch.clamp(likelihood_high, 1e-9, 1.0)
         # print("second", likelihood_high)
-        likelihood_high = F.softmax(likelihood_high/self.args.temperature, dim=0)
-        # likelihood_high = likelihood_high.reshape((1, self.grid_dirs, self.map_rows, self.map_cols))
-        # print("third", likelihood_high)
-        # likelihood_high = torch.clamp(likelihood_high, 1e-9, 1.0)
-        # print("fourth", likelihood_high)
-        # likelihood_high /= likelihood_high.sum()
-        # print("fifth", likelihood_high)
+        high_shape = likelihood_high.shape
+        likelihood_high = F.softmax(likelihood_high.view(-1)/self.args.temperature, dim=0)
+        likelihood_high = likelihood_high.reshape(high_shape)
         likelihood_high = torch.clamp(likelihood_high, 1e-9, 1.0)
-        # print("final", likelihood_high)
         self.lm_time = time.time()-time_mark
         print ("[TIME for LM] %.2f sec"%(self.lm_time))
         # del input_batch0, input_batch1, output0, output1        
         if compute_loss:
             self.compute_loss(likelihood, likelihood_high)
-        return likelihood, likelihood_high
-        # self.likelihood = torch.clamp(self.likelihood, 1e-9, 1.0)
-        # self.likelihood = self.likelihood/self.likelihood.sum()
 
+        return likelihood.reshape((self.grid_dirs, self.grid_rows, self.grid_cols)), likelihood_high.reshape((self.grid_dirs, self.map_rows, self.map_cols))
+
+    
     def compute_loss(self, likelihood, likelihood_high):
         gtl = torch.tensor(self.gt_likelihood).float().to(self.device)
         gtl_high = torch.tensor(self.gt_likelihood_high).float().to(self.device)
@@ -2750,7 +2711,7 @@ class LocalizationNode:
         if self.args.pm_loss == "KL":
             # print(gtl_high)
             # print(torch.log(gtl_high/likelihood_high))
-            self.loss_ll0 = -(gtl * torch.log(gtl/likelihood)).sum()
+            self.loss_ll0 = (gtl * torch.log(gtl/likelihood)).sum()
             self.loss_ll1 = (gtl_high * torch.log(gtl_high / likelihood_high)).sum()
             
         elif self.args.pm_loss == "L1":
@@ -2792,16 +2753,21 @@ class LocalizationNode:
 
         
     def product_belief(self):
-        if self.args.verbose>1: print("product_belief")
+        if self.args.verbose>1:
+            print("product_belief")
+            print ("gt", self.gt_likelihood.shape)
+            print ("bel", self.belief.shape)
+            print ("lik", self.likelihood.shape)
+            print ("gt2", self.gt_likelihood_high.shape)
+            print ("bel2", self.belief_high.shape)
+            print ("lik2", self.likelihood_high.shape)
 
         if self.args.use_gt_likelihood :
-            # gt = torch.from_numpy(self.gt_likelihood/self.gt_likelihood.sum()).float().to(self.divice)
             gt = torch.tensor(self.gt_likelihood).float().to(self.device)
-            self.belief = self.belief * (gt)
-            #self.belief = self.belief * (self.gt_likelihood)
+            self.belief = self.belief * gt
         else:
             likelihood = self.likelihood.clone().detach().requires_grad_(True)
-            self.belief = self.belief * likelihood
+            self.belief = self.belief * likelihood #.reshape((self.grid_dirs, self.grid_rows, self.grid_cols))
         #normalize belief
         self.belief /= self.belief.sum()
         #update bel_grid
@@ -2809,21 +2775,17 @@ class LocalizationNode:
         self.bel_grid = Grid(head=guess[0],row=guess[1],col=guess[2])
 
         if self.args.use_gt_likelihood :
-            # gt = torch.from_numpy(self.gt_likelihood/self.gt_likelihood.sum()).float().to(self.divice)
             gt_high = torch.tensor(self.gt_likelihood_high).float().to(self.device)
             self.belief_high = self.belief_high * (gt_high)
-            #self.belief = self.belief * (self.gt_likelihood)
         else:
             likelihood_high = self.likelihood_high.clone().detach().requires_grad_(True)
-            self.belief_high = self.belief_high * likelihood_high
+            self.belief_high = self.belief_high * likelihood_high  #.reshape((self.grid_dirs, self.map_rows, self.map_cols))
         #normalize belief
-        self.belief /= self.belief.sum()
         self.belief_high /= self.belief_high.sum()
         #update bel_grid
         # guess = np.unravel_index(np.argmax(self.belief.cpu().detach().numpy(), axis=None), self.belief.shape)
         # self.bel_grid = Grid(head=guess[0],row=guess[1],col=guess[2])
-
-        
+                                                                       
     def do_the_honors(self, pose, belief):
         scan_data = self.get_virtual_lidar(pose)
         scan_2d, _ = self.get_scan_2d_n_headings(scan_data, self.xlim, self.ylim)
@@ -3916,7 +3878,7 @@ if __name__ == '__main__':
 
     
     ## MAPS, EPISODES, MOTIONS
-    parser.add_argument("-n", "--num", help = "num envs, episodes, steps", nargs=3, default=[1,10, 10], type=int)    
+    parser.add_argument("-n", "--num", help = "num envs, episodes, steps", nargs=3, default=[1,10000, 10], type=int)    
     parser.add_argument("--load-map", help = "load an actual map", type=str, default=None)
     parser.add_argument("--distort-map", action="store_true")
     parser.add_argument("--flip-map", help = "flip n pixels 0 <--> 1 in map image", type=int, default=0)
@@ -4051,8 +4013,8 @@ if __name__ == '__main__':
     parser.add_argument("--drop-rate", type=float, default=0.0)
 
     ## LM-PARAMS
-    parser.add_argument('-lp0', '--lrpm0', help="lr for PM0 (1e-4)", type=float, default=1e-4)
-    parser.add_argument('-lp1', '--lrpm1', help="lr for PM1 (1e-4)", type=float, default=1e-4)
+    parser.add_argument('-lp0', '--lrpm0', help="lr for PM0 (1e-4)", type=float, default=3e-4)
+    parser.add_argument('-lp1', '--lrpm1', help="lr for PM1 (1e-4)", type=float, default=3e-4)
     parser.add_argument('-upm0', '--update-pm0-by', help="train PM with GTL,RL,both, none", choices = ['GTL','RL','BOTH','NONE'], default='GTL', type=str)
     parser.add_argument('-upm1', '--update-pm1-by', help="train PM with GTL,RL,both, none", choices = ['GTL','RL','BOTH','NONE'], default='GTL', type=str)
 
