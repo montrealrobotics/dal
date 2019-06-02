@@ -624,10 +624,10 @@ class LocalizationNode:
 
                 self.product_belief()
                 self.belief = self.belief.reshape((4,11,11))
-                for ii in range(self.grid_rows):
-                    for jj in range(self.grid_cols):
-                        for kk in range(4):
-                            self.belief_high[kk, ii*8: (ii+1)*8, jj*8 : (jj+1)*8] = self.belief[kk, ii, jj] * self.likelihood_high[kk, ii*8: (ii+1)*8, jj*8 : (jj+1)*8]
+                # for ii in range(self.grid_rows):
+                #     for jj in range(self.grid_cols):
+                #         for kk in range(4):
+                #             self.belief_high[kk, ii*8: (ii+1)*8, jj*8 : (jj+1)*8] = self.belief[kk, ii, jj] * self.likelihood_high[kk, ii*8: (ii+1)*8, jj*8 : (jj+1)*8]
 
                 ### reward r(t)
                 self.update_bel_list()
@@ -2744,8 +2744,8 @@ class LocalizationNode:
         self.belief /= self.belief.sum()
         self.belief_high /= self.belief_high.sum()
         #update bel_grid
-        guess = np.unravel_index(np.argmax(self.belief.cpu().detach().numpy(), axis=None), self.belief.shape)
-        self.bel_grid = Grid(head=guess[0],row=guess[1],col=guess[2])
+        # guess = np.unravel_index(np.argmax(self.belief.cpu().detach().numpy(), axis=None), self.belief.shape)
+        # self.bel_grid = Grid(head=guess[0],row=guess[1],col=guess[2])
 
         
     def do_the_honors(self, pose, belief):
