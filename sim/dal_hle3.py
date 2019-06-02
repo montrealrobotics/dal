@@ -624,10 +624,10 @@ class LocalizationNode:
 
                 self.product_belief()
                 self.belief = self.belief.reshape((4,11,11))
-                for ii in range(self.rows):
-                    for jj in range(self.cols):
-                        for kk in rangera
-                        self.belief_high[ii*8: (ii+1)*8]
+                for ii in range(self.grid_rows):
+                    for jj in range(self.grid_cols):
+                        for kk in range(4):
+                            self.belief_high[kk, ii*8: (ii+1)*8, jj*8 : (jj+1)*8] = self.belief[kk, ii, jj] * self.likelihood_high[kk, ii*8: (ii+1)*8, jj*8 : (jj+1)*8]
 
                 ### reward r(t)
                 self.update_bel_list()
