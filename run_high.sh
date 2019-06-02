@@ -67,15 +67,16 @@ fi
 HEADINGS=$DIRS
 
 LP=1e-4
-EPISODE_LENGTH=25
+EPISODE_LENGTH=10
 N_MAPS=1
 
 if [ $MODE = train_lm ]; then
     UPDATE=$UPDATE' --update-pm0-by=GTL '
     UPDATE=$UPDATE' --update-pm1-by=GTL '
-    UPDATE=$UPDATE' --schedule-pm0 --pm-step-size=1000 --pm-decay=0.5 '
-    UPDATE=$UPDATE' --schedule-pm1 --pm-step-size=1000 --pm-decay=0.5 '
-    UPDATE=$UPDATE' -lp='$LP' -pbs=10 --temp=0.1 '
+    # UPDATE=$UPDATE' --schedule-pm0 --pm-step-size=1000 --pm-decay=0.5 '
+    # UPDATE=$UPDATE' --schedule-pm1 --pm-step-size=1000 --pm-decay=0.5 '
+    UPDATE=$UPDATE' --schedule-pm --pm-step-size=1000 --pm-decay=0.5 '
+    #UPDATE=$UPDATE' -lp='$LP' -pbs=10 --temp=0.1 '
 fi
 
 if [ $MODE = train_rl ]; then

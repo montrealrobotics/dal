@@ -295,15 +295,15 @@ class LocalizationNode:
         self.entropy_coef = self.args.c_entropy
 
 
-        if self.args.update_pm1_by == "NONE":
-            self.optimizer_pm0 = None
-            self.optimizer_pm1 = None
-        else:
-            self.optimizer_pm0 = torch.optim.Adam(list(self.perceptual_model0.parameters()), lr=self.args.lrpm0)
-            self.optimizer_pm1 = torch.optim.Adam(list(self.perceptual_model1.parameters()), lr=self.args.lrpm1)
-            if self.args.schedule_pm:
-                self.scheduler_pm0 = StepLR(self.optimizer_pm0, step_size=self.args.pm_step_size, gamma=self.args.pm_decay)
-                self.scheduler_pm1 = StepLR(self.optimizer_pm1, step_size=self.args.pm_step_size, gamma=self.args.pm_decay)
+        # if self.args.update_pm1_by == "NONE":
+        #     self.optimizer_pm0 = None
+        #     self.optimizer_pm1 = None
+        # else:
+        self.optimizer_pm0 = torch.optim.Adam(list(self.perceptual_model0.parameters()), lr=self.args.lrpm0)
+        self.optimizer_pm1 = torch.optim.Adam(list(self.perceptual_model1.parameters()), lr=self.args.lrpm1)
+            # if self.args.schedule_pm:
+            #     self.scheduler_pm0 = StepLR(self.optimizer_pm0, step_size=self.args.pm_step_size, gamma=self.args.pm_decay)
+            #     self.scheduler_pm1 = StepLR(self.optimizer_pm1, step_size=self.args.pm_step_size, gamma=self.args.pm_decay)
                 # self.scheduler_lp = ReduceLROnPlateau(self.optimizer_pm,
                 #                                    factor = 0.5,
                 #                                    patience = 2,
@@ -2671,11 +2671,14 @@ class LocalizationNode:
 
     def compute_loss(self, likelihood, likelihood_high):
         gtl = torch.tensor(self.gt_likelihood).float().to(self.device)
+        gtl = gtl.unsqueeze(dim=0)
         gtl_high = torch.tensor(self.gt_likelihood_high).float().to(self.device)
+        gtl_high = gtl_high.unsqueeze(dim=0)
 
         print("yes, computing new loss")
         criterion = nn.MSELoss()
-        self.loss_ll0 = 10000.0*criterion(gtl, likelihood)
+
+        self.loss_ll0 = 10000.0*criterion(likelihood, gtl)
         self.loss_ll1 = 100000.0*criterion(gtl_high, likelihood_high)
         # if self.args.pm_loss == "KL":
         #     # print(gtl_high)
@@ -3477,13 +3480,14 @@ class LocalizationNode:
         print("*********************back_prop_pm0********************")
         if self.args.update_pm0_by=="GTL" or self.args.update_pm0_by=="BOTH":
             self.optimizer_pm0.zero_grad()
+            print("level-0 loss is ========= ", sum(self.loss_likelihood0) )
             (sum(self.loss_likelihood0)/float(len(self.loss_likelihood0))).backward(retain_graph = True)
             self.optimizer_pm0.step()
 
             mean_test_loss = sum(self.loss_likelihood0).item()
-            if self.args.schedule_pm:
-                # self.scheduler_pm.step(mean_test_loss)
-                self.scheduler_pm0.step()
+            # if self.args.schedule_pm:
+            #     # self.scheduler_pm.step(mean_test_loss)
+            #     self.scheduler_pm0.step()
             self.pm_backprop_cnt += 1
             if self.args.save and self.pm_backprop_cnt % self.args.mdl_save_freq == 0:
                 torch.save(self.perceptual_model0.state_dict(), self.pm_filepath0)
@@ -3500,13 +3504,14 @@ class LocalizationNode:
             self.optimizer_pm1.zero_grad()
             # (sum(self.loss_likelihood1)/float(len(self.loss_likelihood1))).backward(retain_graph = True)
             total_loss = sum(self.loss_likelihood1)
+            print("level-1 loss is ========= ", total_loss )
             total_loss.backward()
             self.optimizer_pm1.step()
 
             mean_test_loss = sum(self.loss_likelihood1).item()
-            if self.args.schedule_pm:
-                # self.scheduler_pm.step(mean_test_loss)
-                self.scheduler_pm1.step()
+            # if self.args.schedule_pm:
+            #     # self.scheduler_pm.step(mean_test_loss)
+            #     self.scheduler_pm1.step()
             self.pm_backprop_cnt += 1
             if self.args.save and self.pm_backprop_cnt % self.args.mdl_save_freq == 0:
                 torch.save(self.perceptual_model1.state_dict(), self.pm_filepath1)
@@ -3926,8 +3931,8 @@ if __name__ == '__main__':
     parser.add_argument("--drop-rate", type=float, default=0.0)
 
     ## LM-PARAMS
-    parser.add_argument('-lp0', '--lrpm0', help="lr for PM0 (1e-4)", type=float, default=1e-4)
-    parser.add_argument('-lp1', '--lrpm1', help="lr for PM1 (1e-4)", type=float, default=1e-4)
+    parser.add_argument('-lp0', '--lrpm0', help="lr for PM0 (1e-4)", type=float, default=3e-4)
+    parser.add_argument('-lp1', '--lrpm1', help="lr for PM1 (1e-4)", type=float, default=3e-4)
     parser.add_argument('-upm0', '--update-pm0-by', help="train PM with GTL,RL,both, none", choices = ['GTL','RL','BOTH','NONE'], default='GTL', type=str)
     parser.add_argument('-upm1', '--update-pm1-by', help="train PM with GTL,RL,both, none", choices = ['GTL','RL','BOTH','NONE'], default='GTL', type=str)
 
