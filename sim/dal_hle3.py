@@ -624,10 +624,10 @@ class LocalizationNode:
 
                 self.product_belief()
                 self.belief = self.belief.reshape((4,11,11))
-                for ii in range(self.rows):
-                    for jj in range(self.cols):
-                        for kk in rangera
-                        self.belief_high[ii*8: (ii+1)*8]
+                # for ii in range(self.grid_rows):
+                #     for jj in range(self.grid_cols):
+                #         for kk in range(4):
+                #             self.belief_high[kk, ii*8: (ii+1)*8, jj*8 : (jj+1)*8] = self.belief[kk, ii, jj] * self.likelihood_high[kk, ii*8: (ii+1)*8, jj*8 : (jj+1)*8]
 
                 ### reward r(t)
                 self.update_bel_list()
@@ -2744,8 +2744,8 @@ class LocalizationNode:
         self.belief /= self.belief.sum()
         self.belief_high /= self.belief_high.sum()
         #update bel_grid
-        guess = np.unravel_index(np.argmax(self.belief.cpu().detach().numpy(), axis=None), self.belief.shape)
-        self.bel_grid = Grid(head=guess[0],row=guess[1],col=guess[2])
+        # guess = np.unravel_index(np.argmax(self.belief.cpu().detach().numpy(), axis=None), self.belief.shape)
+        # self.bel_grid = Grid(head=guess[0],row=guess[1],col=guess[2])
 
         
     def do_the_honors(self, pose, belief):
@@ -3250,7 +3250,9 @@ class LocalizationNode:
             self.belief = torch.from_numpy(self.belief).float().to(self.device)
             return
         self.belief=self.trans_bel(self.belief, self.action_str)
+        self.belief_high = self.trans_bel_high(self.belief_high, self.action_str)
         self.belief = torch.from_numpy(self.belief).float().to(self.device)#$ requires_grad=True)
+        self.belief_high = torch.from_numpy(self.belief_high).float().to(self.device)
         
         
     def trans_bel(self, bel, action):
@@ -3303,6 +3305,57 @@ class LocalizationNode:
             bel = sum(roll_n + roll_p)+bel                    
         bel /= np.sum(bel)
         return bel
+
+    def trans_bel_high(self, bel_high, action):
+        rotation_step = self.args.rot_step
+
+        if action == "turn_right":
+            bel_high = np.roll(bel_high, -rotation_step, axis=0)
+        elif action == "turn_left":
+            bel_high = np.roll(bel_high, rotation_step, axis=0)
+        elif action == "go_fwd":
+            if self.args.trans_belief == "roll":
+                i = 0
+                bel_high[i, :, :] = np.roll(bel_high[i, :, :], -1, axis=0)
+                i = 1
+                bel_high[i, :, :] = np.roll(bel_high[i, :, :], -1, axis=1)
+                i = 2
+                bel_high[i, :, :] = np.roll(bel_high[i, :, :], 1, axis=0)
+                i = 3
+                bel_high[i, :, :] = np.roll(bel_high[i, :, :], 1, axis=1)
+
+            elif self.args.trans_belief == "stoch-shift" or self.args.trans_belief == "shift":
+                prior = bel_high.min()
+                for i in range(self.grid_dirs):
+                    theta = i * self.heading_resol
+                    fwd_dist = self.args.fwd_step
+                    dx = fwd_dist * np.cos(theta + np.pi)
+                    dy = fwd_dist * np.sin(theta + np.pi)
+                    # simpler way:
+                    DX = np.round(dx)
+                    DY = np.round(dy)
+                    shft_hrz = shift(bel_high[i, :, :], int(DY), axis=1, fill=prior)
+                    bel_high[i, :, :] = shift(shft_hrz, int(DX), axis=0, fill=prior)
+
+        print(bel_high.shape)
+        if self.args.trans_belief == "stoch-shift" and action != "hold":
+            for ch in range(self.grid_dirs):
+                bel_high[ch, :, :] = ndimage.gaussian_filter(bel_high[ch, :, :], sigma=0.1*self.sigma_xy)
+
+            n_dir = self.grid_dirs // 4
+            p_roll = 0.20
+            roll_n = []
+            roll_p = []
+            for r in range(1, n_dir):
+                if roll_n == [] and roll_p == []:
+                    roll_n.append(p_roll * np.roll(bel_high, -1, axis=0))
+                    roll_p.append(p_roll * np.roll(bel_high, 1, axis=0))
+                else:
+                    roll_n.append(p_roll * np.roll(roll_n[-1], -1, axis=0))
+                    roll_p.append(p_roll * np.roll(roll_p[-1], 1, axis=0))
+            bel_high = sum(roll_n + roll_p) + bel_high
+        bel_high /= np.sum(bel_high)
+        return bel_high
 
         
     def get_reward(self):
