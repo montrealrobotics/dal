@@ -1,8 +1,5 @@
 # Deep Active Localization (DAL)
-Repository for Deep Active Localization research and benchmarks. You can read our full paper on arxiv: https://arxiv.org/abs/1903.01669
-- (Minor Note: We are still working on some minor documentations of the code, but it is ready to use)
-
-For training or testing on our custom simulator, see: sim/readme.md
+Repository for Deep Active Localization research and benchmarks. Accepted to RAL. https://ieeexplore.ieee.org/abstract/document/8784238, https://arxiv.org/abs/1903.01669
 
 Requirements:
 - Python 3.5+
@@ -13,10 +10,15 @@ Requirements:
 
 Please use this bibtex if you want to cite this repository in your publications:
 ```
-@inproceedings{Krishna2019DeepAL,
-  title={Deep Active Localization},
-  author={Sai Krishna and Keehong Seo and Dhaivat Bhatt and Vincent Mai and Krishna Murthy and Liam Paull},
-  year={2019}
+@article{gottipati2019deep,
+ title={Deep Active Localization},
+ author={Gottipati, Sai Krishna and Seo, Keehong and Bhatt, Dhaivat and Mai, Vincent and Murthy, Krishna and Paull, Liam},
+ journal={IEEE Robotics and Automation Letters},
+ volume={4},
+ number={4},
+ pages={4394--4401},
+ year={2019},
+ publisher={IEEE}
 }
 ```
 
@@ -32,6 +34,7 @@ pip3 install -e .
 
 ## Basic Usage
 For running our gym environment (which we call `dal-v0`), you can just do `python main.py` (More instructions will come soon but the code and parameters used are mostly self explanatory. you can also look at a2c_ppo_acktr/arguments.py)
+For training or testing on our custom simulator, see: sim/readme.md
 
 ## Acknowledgements
 - Gazebo
